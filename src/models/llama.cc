@@ -18,13 +18,13 @@ struct DeviceResource{
         w_ffn_down;
     // Streams
     stream_t stream_compute, stream_data;
-}
+};
 
 struct Model
 {
     LlamaMeta meta;
     std::vector<DeviceResource> const dev;
-}
+};
 
 __C struct Model *
 create_model(LlamaMeta const *,
