@@ -16,19 +16,13 @@
 #endif
 
 #include <infini_operators.h>
+#include "infinirt.h"
 
 typedef enum
 {
     DATA_TYPE_F32,
     DATA_TYPE_F16,
 } DataType;
-
-typedef enum
-{
-    DEVICE_CPU,
-    DEVICE_NVIDIA,
-    DEVICE_CAMBRICON,
-} DeviceType;
 
 ////////////////// Models //////////////////
 typedef struct
