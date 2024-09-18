@@ -17,7 +17,7 @@ struct DeviceResource{
         w_ffn_gate_up,
         w_ffn_down;
     // Streams
-    stream_t stream_compute, stream_data;
+    infiniStream_t stream_compute, stream_data;
 };
 
 struct Model

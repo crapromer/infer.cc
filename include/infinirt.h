@@ -14,6 +14,8 @@
 #else
 #define __C
 #endif
+#include <stddef.h>
+#include <stdint.h>
 
 typedef enum
 {
@@ -24,31 +26,44 @@ typedef enum
 
 typedef enum
 {
-    STATUS_SUCCESS = 0,
-    STATUS_EXECUTION_FAILED = 1,
+    INFINIRT_STATUS_SUCCESS = 0,
+    INFINIRT_STATUS_EXECUTION_FAILED = 1,
+    INFINIRT_STATUS_BAD_DEVICE = 2,
+    INFINIRT_STATUS_DEVICE_NOT_SUPPORTED = 3,
+    INFINIRT_STATUS_DEVICE_MISMATCH = 4,
+    INFINIRT_STATUS_INVALID_ARGUMENT = 5,
+    INFINIRT_STATUS_ILLEGAL_MEMORY_ACCESS = 6,
 } infinirtStatus_t;
 
-// Device
-__C __export infinirtStatus_t setDevice(DeviceType device, int deviceId);
+struct Memory
+{
+    void *ptr;
+    size_t size;
+    DeviceType device;
+    uint32_t deviceId;
+};
+typedef struct Memory *infiniMemory_t;
 
 // Stream
-typedef void *stream_t;
-#define DEFAULT_STREAM ((stream_t)0)
-__C __export infinirtStatus_t createStream(stream_t* pStream, DeviceType device, int deviceId);
-__C __export infinirtStatus_t destoryStream(DeviceType device, int deviceId, stream_t stream);
+struct Stream;
+typedef struct Stream *infiniStream_t;
+#define INFINIRT_NULL_STREAM nullptr
+__C __export infinirtStatus_t infiniCreateStream(infiniStream_t *pStream, DeviceType device, uint32_t deviceId);
+__C __export infinirtStatus_t infiniDestoryStream(infiniStream_t stream);
 
 // Event
-typedef void *event_t;
-__C __export infinirtStatus_t createEvent(event_t* pEvent, DeviceType device, int deviceId, stream_t stream);
-__C __export infinirtStatus_t destoryEvent(event_t event, DeviceType device, int deviceId);
-__C __export infinirtStatus_t waitEvent(event_t event, DeviceType device, int deviceId, stream_t stream);
+struct Event;
+typedef struct Event *infiniEvent_t;
+__C __export infinirtStatus_t infiniCreateEvent(infiniEvent_t *pEvent, infiniStream_t stream);
+__C __export infinirtStatus_t infiniDestoryEvent(infiniEvent_t event);
+__C __export infinirtStatus_t infiniWaitEvent(infiniEvent_t event, infiniStream_t stream);
 
 // Memory
-__C __export infinirtStatus_t *deviceMalloc(DeviceType device, int deviceId, size_t size);
-__C __export infinirtStatus_t *deviceMallocAsync(DeviceType device, int deviceId, size_t size, stream_t stream);
-__C __export infinirtStatus_t deviceFree(void *ptr, DeviceType device, int deviceId);
-__C __export infinirtStatus_t deviceFreeAsync(void *ptr, DeviceType device, int deviceId, stream_t stream);
-__C __export infinirtStatus_t memcpyH2DAsync(void *dst, const void *src, size_t size, DeviceType device, int deviceId, stream_t stream);
-__C __export infinirtStatus_t memcpyD2H(void *dst, const void *src, size_t size, DeviceType device, int deviceId);
+__C __export infinirtStatus_t infiniMalloc(infiniMemory_t *pMemory, DeviceType device, uint32_t deviceId, size_t size);
+__C __export infinirtStatus_t infiniMallocAsync(infiniMemory_t *pMemory, DeviceType device, uint32_t deviceId, size_t size, infiniStream_t stream);
+__C __export infinirtStatus_t infiniFree(infiniMemory_t ptr);
+__C __export infinirtStatus_t infiniFreeAsync(infiniMemory_t ptr, infiniStream_t stream);
+__C __export infinirtStatus_t infiniMemcpyH2DAsync(infiniMemory_t dst, const void* src, size_t size, infiniStream_t stream);
+__C __export infinirtStatus_t infiniMemcpyD2H(void *dst, const infiniMemory_t src, size_t size);
 
 #endif
