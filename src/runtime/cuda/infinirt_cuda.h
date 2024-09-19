@@ -14,7 +14,7 @@
 infinirtStatus_t createCudaStream(infinirtStream_t *pStream, uint32_t deviceId) IMPL_WITH_CUDA
     infinirtStatus_t destoryCudaStream(infinirtStream_t stream) IMPL_WITH_CUDA
 
-    infinirtStatus_t createCudaEvent(infinirtEvent_t *pEvent, infinirtStream_t stream) IMPL_WITH_CUDA
+    infinirtStatus_t createCudaEvent(infinirtEvent_t *pEvent, uint32_t deviceId) IMPL_WITH_CUDA
     infinirtStatus_t destoryCudaEvent(infinirtEvent_t event) IMPL_WITH_CUDA
     infinirtStatus_t waitCudaEvent(infinirtEvent_t event, infinirtStream_t stream) IMPL_WITH_CUDA
 

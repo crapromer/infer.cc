@@ -28,14 +28,12 @@ __C infinirtStatus_t infinirtStreamDestroy(infinirtStream_t stream)
 }
 
 // Event
-__C infinirtStatus_t infinirtEventCreate(infinirtEvent_t *pEvent, infinirtStream_t stream)
+__C infinirtStatus_t infinirtEventCreate(infinirtEvent_t *pEvent, DeviceType device, uint32_t deviceId)
 {
-    if (stream == nullptr)
-        return INFINIRT_STATUS_INVALID_ARGUMENT;
-    switch (stream->device)
+    switch (device)
     {
     case DEVICE_NVIDIA:
-        return createCudaEvent(pEvent, stream);
+        return createCudaEvent(pEvent, deviceId);
 
     default:
         return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;

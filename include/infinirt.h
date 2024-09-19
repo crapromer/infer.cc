@@ -33,6 +33,7 @@ typedef enum
     INFINIRT_STATUS_DEVICE_MISMATCH = 4,
     INFINIRT_STATUS_INVALID_ARGUMENT = 5,
     INFINIRT_STATUS_ILLEGAL_MEMORY_ACCESS = 6,
+    INFINIRT_STATUS_NOT_READY = 7,
 } infinirtStatus_t;
 
 struct Memory
@@ -54,7 +55,10 @@ __C __export infinirtStatus_t infinirtStreamDestroy(infinirtStream_t stream);
 // Event
 struct Event;
 typedef struct Event *infinirtEvent_t;
-__C __export infinirtStatus_t infinirtEventCreate(infinirtEvent_t *pEvent, infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtEventCreate(infinirtEvent_t *pEvent, DeviceType device, uint32_t deviceId);
+__C __export infinirtStatus_t infinirtEventRecord(infinirtEvent_t event, infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtEventQuery(infinirtEvent_t event);
+__C __export infinirtStatus_t infinirtEventSynchronize(infinirtEvent_t event);
 __C __export infinirtStatus_t infinirtEventDestroy(infinirtEvent_t event);
 __C __export infinirtStatus_t infinirtStreamWaitEvent(infinirtEvent_t event, infinirtStream_t stream);
 
