@@ -2,7 +2,8 @@
 #include "infinirt.h"
 #include <vector>
 
-struct DeviceResource{
+struct DeviceResource
+{
     // Device
     DeviceType device;
     unsigned int id;
@@ -17,7 +18,7 @@ struct DeviceResource{
         w_ffn_gate_up,
         w_ffn_down;
     // Streams
-    infiniStream_t stream_compute, stream_data;
+    infinirtStream_t stream_compute, stream_data;
 };
 
 struct Model
@@ -67,6 +68,7 @@ __C void infer(struct Model const *,
     // TODO: Implement this function
 }
 
-__C void destroy_model(struct Model *){
+__C void destroy_model(struct Model *)
+{
     // TODO: Implement this function
 }

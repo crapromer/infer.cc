@@ -42,28 +42,28 @@ struct Memory
     DeviceType device;
     uint32_t deviceId;
 };
-typedef struct Memory *infiniMemory_t;
+typedef struct Memory *infinirtMemory_t;
 
 // Stream
 struct Stream;
-typedef struct Stream *infiniStream_t;
+typedef struct Stream *infinirtStream_t;
 #define INFINIRT_NULL_STREAM nullptr
-__C __export infinirtStatus_t infiniCreateStream(infiniStream_t *pStream, DeviceType device, uint32_t deviceId);
-__C __export infinirtStatus_t infiniDestoryStream(infiniStream_t stream);
+__C __export infinirtStatus_t infinirtStreamCreate(infinirtStream_t *pStream, DeviceType device, uint32_t deviceId);
+__C __export infinirtStatus_t infinirtStreamDestroy(infinirtStream_t stream);
 
 // Event
 struct Event;
-typedef struct Event *infiniEvent_t;
-__C __export infinirtStatus_t infiniCreateEvent(infiniEvent_t *pEvent, infiniStream_t stream);
-__C __export infinirtStatus_t infiniDestoryEvent(infiniEvent_t event);
-__C __export infinirtStatus_t infiniWaitEvent(infiniEvent_t event, infiniStream_t stream);
+typedef struct Event *infinirtEvent_t;
+__C __export infinirtStatus_t infinirtEventCreate(infinirtEvent_t *pEvent, infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtEventDestroy(infinirtEvent_t event);
+__C __export infinirtStatus_t infinirtStreamWaitEvent(infinirtEvent_t event, infinirtStream_t stream);
 
 // Memory
-__C __export infinirtStatus_t infiniMalloc(infiniMemory_t *pMemory, DeviceType device, uint32_t deviceId, size_t size);
-__C __export infinirtStatus_t infiniMallocAsync(infiniMemory_t *pMemory, DeviceType device, uint32_t deviceId, size_t size, infiniStream_t stream);
-__C __export infinirtStatus_t infiniFree(infiniMemory_t ptr);
-__C __export infinirtStatus_t infiniFreeAsync(infiniMemory_t ptr, infiniStream_t stream);
-__C __export infinirtStatus_t infiniMemcpyH2DAsync(infiniMemory_t dst, const void* src, size_t size, infiniStream_t stream);
-__C __export infinirtStatus_t infiniMemcpyD2H(void *dst, const infiniMemory_t src, size_t size);
+__C __export infinirtStatus_t infinirtMalloc(infinirtMemory_t *pMemory, DeviceType device, uint32_t deviceId, size_t size);
+__C __export infinirtStatus_t infinirtMallocAsync(infinirtMemory_t *pMemory, DeviceType device, uint32_t deviceId, size_t size, infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtFree(infinirtMemory_t ptr);
+__C __export infinirtStatus_t infinirtFreeAsync(infinirtMemory_t ptr, infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtMemcpyH2DAsync(infinirtMemory_t dst, const void *src, size_t size, infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtMemcpyD2H(void *dst, const infinirtMemory_t src, size_t size);
 
 #endif

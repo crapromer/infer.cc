@@ -2,7 +2,7 @@
 #include "cuda/infinirt_cuda.h"
 
 // Stream
-__C infinirtStatus_t infiniCreateStream(infiniStream_t *pStream, DeviceType device, uint32_t deviceId)
+__C infinirtStatus_t infinirtStreamCreate(infinirtStream_t *pStream, DeviceType device, uint32_t deviceId)
 {
     switch (device)
     {
@@ -13,7 +13,7 @@ __C infinirtStatus_t infiniCreateStream(infiniStream_t *pStream, DeviceType devi
         return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
     }
 }
-__C infinirtStatus_t infiniDestoryStream(infiniStream_t stream)
+__C infinirtStatus_t infinirtStreamDestroy(infinirtStream_t stream)
 {
     if (stream == nullptr)
         return INFINIRT_STATUS_SUCCESS;
@@ -28,7 +28,7 @@ __C infinirtStatus_t infiniDestoryStream(infiniStream_t stream)
 }
 
 // Event
-__C infinirtStatus_t infiniCreateEvent(infiniEvent_t *pEvent, infiniStream_t stream)
+__C infinirtStatus_t infinirtEventCreate(infinirtEvent_t *pEvent, infinirtStream_t stream)
 {
     if (stream == nullptr)
         return INFINIRT_STATUS_INVALID_ARGUMENT;
@@ -42,7 +42,7 @@ __C infinirtStatus_t infiniCreateEvent(infiniEvent_t *pEvent, infiniStream_t str
     }
 }
 
-__C infinirtStatus_t infiniDestoryEvent(infiniEvent_t event)
+__C infinirtStatus_t infinirtEventDestroy(infinirtEvent_t event)
 {
     if (event == nullptr)
         return INFINIRT_STATUS_SUCCESS;
@@ -55,7 +55,7 @@ __C infinirtStatus_t infiniDestoryEvent(infiniEvent_t event)
         return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
     }
 }
-__C infinirtStatus_t infiniWaitEvent(infiniEvent_t event, infiniStream_t stream)
+__C infinirtStatus_t infinirtStreamWaitEvent(infinirtEvent_t event, infinirtStream_t stream)
 {
     if (event == nullptr)
         return INFINIRT_STATUS_INVALID_ARGUMENT;
@@ -72,7 +72,7 @@ __C infinirtStatus_t infiniWaitEvent(infiniEvent_t event, infiniStream_t stream)
 }
 
 // Memory
-__C infinirtStatus_t infiniMalloc(infiniMemory_t *pMemory, DeviceType device, uint32_t deviceId, size_t size)
+__C infinirtStatus_t infinirtMalloc(infinirtMemory_t *pMemory, DeviceType device, uint32_t deviceId, size_t size)
 {
     switch (device)
     {
@@ -84,7 +84,7 @@ __C infinirtStatus_t infiniMalloc(infiniMemory_t *pMemory, DeviceType device, ui
     }
 }
 
-__C infinirtStatus_t infiniMallocAsync(infiniMemory_t *pMemory, DeviceType device, uint32_t deviceId, size_t size, infiniStream_t stream)
+__C infinirtStatus_t infinirtMallocAsync(infinirtMemory_t *pMemory, DeviceType device, uint32_t deviceId, size_t size, infinirtStream_t stream)
 {
     if (stream != nullptr && device != stream->device)
         return INFINIRT_STATUS_DEVICE_MISMATCH;
@@ -98,7 +98,7 @@ __C infinirtStatus_t infiniMallocAsync(infiniMemory_t *pMemory, DeviceType devic
     }
 }
 
-__C infinirtStatus_t infiniFree(infiniMemory_t ptr)
+__C infinirtStatus_t infinirtFree(infinirtMemory_t ptr)
 {
     if (ptr == nullptr)
         return INFINIRT_STATUS_SUCCESS;
@@ -112,7 +112,7 @@ __C infinirtStatus_t infiniFree(infiniMemory_t ptr)
     }
 }
 
-__C infinirtStatus_t infiniFreeAsync(infiniMemory_t ptr, infiniStream_t stream)
+__C infinirtStatus_t infinirtFreeAsync(infinirtMemory_t ptr, infinirtStream_t stream)
 {
     if (ptr == nullptr)
         return INFINIRT_STATUS_SUCCESS;
@@ -128,7 +128,7 @@ __C infinirtStatus_t infiniFreeAsync(infiniMemory_t ptr, infiniStream_t stream)
     }
 }
 
-__C infinirtStatus_t infiniMemcpyH2DAsync(infiniMemory_t dst, const void *src, size_t size, infiniStream_t stream)
+__C infinirtStatus_t infinirtMemcpyH2DAsync(infinirtMemory_t dst, const void *src, size_t size, infinirtStream_t stream)
 {
     if (dst == nullptr || src == nullptr)
         return INFINIRT_STATUS_INVALID_ARGUMENT;
@@ -147,7 +147,8 @@ __C infinirtStatus_t infiniMemcpyH2DAsync(infiniMemory_t dst, const void *src, s
     }
 }
 
-__C infinirtStatus_t infiniMemcpyD2H(void *dst, const infiniMemory_t src, size_t size){
+__C infinirtStatus_t infinirtMemcpyD2H(void *dst, const infinirtMemory_t src, size_t size)
+{
     if (src == nullptr || dst == nullptr)
         return INFINIRT_STATUS_INVALID_ARGUMENT;
     if (size > src->size)
@@ -162,5 +163,3 @@ __C infinirtStatus_t infiniMemcpyD2H(void *dst, const infiniMemory_t src, size_t
         return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
     }
 }
-
-
