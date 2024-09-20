@@ -1,6 +1,7 @@
 #include "infini_infer.h"
 #include "infinirt.h"
 #include <vector>
+#include "../tensor.h"
 
 struct DeviceResource
 {

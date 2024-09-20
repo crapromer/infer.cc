@@ -132,7 +132,7 @@ __C infinirtStatus_t infinirtMemcpyH2DAsync(infinirtMemory_t dst, const void *sr
         return INFINIRT_STATUS_INVALID_ARGUMENT;
     if (stream != nullptr && dst->device != stream->device)
         return INFINIRT_STATUS_DEVICE_MISMATCH;
-    if (size > dst->size)
+    if (size > dst->size && dst->device != DEVICE_CPU)
         return INFINIRT_STATUS_ILLEGAL_MEMORY_ACCESS;
 
     switch (dst->device)
