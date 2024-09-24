@@ -18,6 +18,11 @@ Tensor Tensor::slice(size_t dim, size_t start, size_t len)
     return tensor;
 }
 
+const Tensor Tensor::slice(size_t dim, size_t start, size_t len) const
+{
+    return this->slice(dim, start, len);
+}
+
 Tensor &Tensor::dim_merge(size_t dim_start, size_t dim_end)
 {
     ASSERT(dim_start <= dim_end && dim_end < this->_shape.size());

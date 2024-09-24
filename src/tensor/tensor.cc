@@ -1,20 +1,29 @@
 #include "../tensor.h"
+#include "../utils.h"
 #include <numeric>
-const std::vector<index_t> &Tensor::shape()
-{
-    return this->_shape;
-}
-const std::vector<stride_t> &Tensor::strides()
-{
-    return this->_strides;
-}
-size_t Tensor::ndim()
-{
-    return this->_shape.size();
-}
-DataType Tensor::dtype()
-{
-    return this->_dtype;
+
+const std::vector<index_t> &Tensor::shape() const { return this->_shape; }
+const std::vector<stride_t> &Tensor::strides() const { return this->_strides; }
+size_t Tensor::ndim() const { return this->_shape.size(); }
+DataType Tensor::dtype() const { return this->_dtype; }
+
+TensorDescriptorHolder::TensorDescriptorHolder(
+    DataType dtype, const std::vector<index_t> &shape,
+    const std::vector<stride_t> &strides) {
+    DataLayout layout;
+    if (dtype == DATA_TYPE_F16) {
+        layout = F16;
+    } else if (dtype == DATA_TYPE_F32) {
+        layout = F32;
+    }
+
+    infiniopCreateTensorDescriptor(&_desc, shape.size(),
+                                   std::vector(shape).data(),
+                                   std::vector(strides).data(), layout);
+};
+
+TensorDescriptorHolder Tensor::desc() const {
+    return TensorDescriptorHolder(this->_dtype, this->_shape, this->_strides);
 }
 
 Tensor Tensor::buffer(DataType dtype, const std::vector<index_t> &shape, DeviceType device, uint32_t device_id, infinirtStream_t stream)
@@ -90,4 +99,20 @@ void *Tensor::data_ptr(infinirtStream_t stream)
     }
 
     return static_cast<char*>(this->storage->memory->ptr) + this->offset;
+}
+
+void const *Tensor::data_ptr(infinirtStream_t stream) const {
+    return static_cast<char const *>(this->data_ptr(stream));
+}
+
+void Tensor::copy_from(const Tensor &src, infiniopHandle_t handle, infinirtStream_t stream) {
+    ASSERT_EQ(this->shape(), src.shape());
+    ASSERT_EQ(this->dtype(), src.dtype());
+    infiniopRearrangeDescriptor_t desc;
+    void* raw_stream;
+    if (stream != nullptr)
+        infinirtGetRawStream(&raw_stream, stream);
+    infiniopCreateRearrangeDescriptor(handle, &desc, src.desc().get(), this->desc().get());
+    infiniopRearrange(desc, this->data_ptr(stream), src.data_ptr(stream), raw_stream);
+    infiniopDestroyRearrangeDescriptor(desc);
 }

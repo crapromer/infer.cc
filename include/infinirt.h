@@ -36,14 +36,14 @@ typedef enum
     INFINIRT_STATUS_NOT_READY = 7,
 } infinirtStatus_t;
 
-struct Memory
+struct InfinirtMemory
 {
     void *ptr;
     size_t size;
     DeviceType device;
     uint32_t deviceId;
 };
-typedef struct Memory *infinirtMemory_t;
+typedef struct InfinirtMemory *infinirtMemory_t;
 
 // Stream
 struct Stream;
@@ -51,6 +51,7 @@ typedef struct Stream *infinirtStream_t;
 #define INFINIRT_NULL_STREAM nullptr
 __C __export infinirtStatus_t infinirtStreamCreate(infinirtStream_t *pStream, DeviceType device, uint32_t deviceId);
 __C __export infinirtStatus_t infinirtStreamDestroy(infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtGetRawStream(void** ptr, infinirtStream_t stream);
 
 // Event
 struct Event;
@@ -69,5 +70,5 @@ __C __export infinirtStatus_t infinirtFree(infinirtMemory_t ptr);
 __C __export infinirtStatus_t infinirtFreeAsync(infinirtMemory_t ptr, infinirtStream_t stream);
 __C __export infinirtStatus_t infinirtMemcpyH2DAsync(infinirtMemory_t dst, const void *src, size_t size, infinirtStream_t stream);
 __C __export infinirtStatus_t infinirtMemcpyD2H(void *dst, const infinirtMemory_t src, size_t size);
-
+__C __export infinirtStatus_t infinirtMemcpyAsync(infinirtMemory_t dst, const infinirtMemory_t src, size_t size, infinirtStream_t stream);
 #endif

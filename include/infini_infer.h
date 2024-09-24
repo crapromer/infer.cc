@@ -35,14 +35,23 @@ typedef struct
 typedef struct
 {
     unsigned int nlayer;
+    // [dvoc, d]
     void const *input_embd;
-    void const *ouput_norm;
+    // [d]
+    void const *output_norm;
+    // [dvoc, d]
     void const *output_embd;
+    // nlayer * [d]
     void const *const *attn_norm;
+    // nlayer * [ndev, (nh + 2 * nkvh) / ndev * dh, d]
     void const *const *attn_qkv;
+    // nlayer * [ndev, d, nkvh / ndev * dh]
     void const *const *attn_o;
+    // nlayer * [d]
     void const *const *ffn_norm;
+    // nlayer * [ndev, 2 * di / ndev, d]
     void const *const *ffn_gate_up;
+    // nlayer * [ndev, d, di / ndev]
     void const *const *ffn_down;
 } LlamaWeights;
 

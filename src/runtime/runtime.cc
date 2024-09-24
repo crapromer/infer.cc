@@ -27,6 +27,13 @@ __C infinirtStatus_t infinirtStreamDestroy(infinirtStream_t stream)
     }
 }
 
+__C infinirtStatus_t infinirtGetRawStream(void **ptr, infinirtStream_t stream) {
+    if (stream == nullptr)
+        return INFINIRT_STATUS_INVALID_ARGUMENT;
+    *ptr = stream->stream;
+    return INFINIRT_STATUS_SUCCESS;
+}
+
 // Event
 __C infinirtStatus_t infinirtEventCreate(infinirtEvent_t *pEvent, DeviceType device, uint32_t deviceId)
 {
@@ -160,4 +167,12 @@ __C infinirtStatus_t infinirtMemcpyD2H(void *dst, const infinirtMemory_t src, si
     default:
         return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
     }
+}
+
+__C __export infinirtStatus_t infinirtMemcpyAsync(infinirtMemory_t dst,
+                                                  const infinirtMemory_t src,
+                                                  size_t size,
+                                                  infinirtStream_t stream) {
+    // TODO: implement this function
+    return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
 }
