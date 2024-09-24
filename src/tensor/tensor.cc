@@ -115,4 +115,5 @@ void Tensor::copy_from(const Tensor &src, infiniopHandle_t handle, infinirtStrea
     infiniopCreateRearrangeDescriptor(handle, &desc, src.desc().get(), this->desc().get());
     infiniopRearrange(desc, this->data_ptr(stream), src.data_ptr(stream), raw_stream);
     infiniopDestroyRearrangeDescriptor(desc);
+    infinirtEventRecord(this->storage->event, stream);
 }
