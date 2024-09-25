@@ -76,7 +76,13 @@ Tensor Tensor::weight(void *data, DataType dtype, const std::vector<index_t> &sh
     }
     tensor._strides = strides;
     tensor.offset = 0;
-    tensor.storage = Storage::make(data, size);
+    if (device == DEVICE_CPU) {
+        tensor.storage = Storage::make(data, size);
+    } else {
+        tensor.storage = Storage::create(size, device, device_id);
+        infinirtMemcpyH2DAsync(tensor.storage->memory, data, size, nullptr);
+    }
+
     return tensor;
 }
 

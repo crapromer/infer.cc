@@ -3,6 +3,7 @@
 #include "infini_infer.h"
 #include "infinirt.h"
 #include "llama_weights.h"
+#include <thread>
 #include <vector>
 
 struct DeviceResource
@@ -146,13 +147,65 @@ __C void drop_kv_cache(struct Model const *, struct KVCache *kv_cache) {
     delete kv_cache;
 }
 
-__C void infer(struct Model const *,
-               unsigned int ntok, unsigned int const *tokens,
-               unsigned int nreq, unsigned int const *req_lens, unsigned int const *req_pos,
-               struct KVCache *kv_caches, unsigned int *ans,
-               float temperature, unsigned int topk, float topp)
-{
-    // TODO: Implement this function
+void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
+                  unsigned int idev, unsigned int ndev, unsigned int ntok,
+                  unsigned int const *tokens, unsigned int nreq,
+                  unsigned int const *req_lens, unsigned int const *req_pos,
+                  std::vector<Tensor> k_cache, std::vector<Tensor> v_cache,
+                  unsigned int *ans, float temperature, unsigned int topk,
+                  float topp) {
+    auto nlayer = meta.nlayer;
+    auto nkvh = meta.nkvh / ndev;
+    auto nh = meta.nh / ndev;
+    auto max_len = meta.dctx;
+    auto dh = meta.dh;
+    auto d = meta.nkvh * meta.dh;
+
+    // Prepare input (Gather and broadcast)
+
+    // Allocate buffers
+
+    for (unsigned int layer = 0; layer < nlayer; layer++) {
+        // 1. Attention
+        // rms norm
+
+        // qkv_proj
+
+        for (unsigned int req = 0; req < nreq; req++) {
+            // self attention
+        }
+
+        // o_proj and all_reduce
+
+        // 2. FFN
+        // rms_norm
+
+        // mlp
+
+        // all_reduce
+    }
+
+    if (idev == 0) {
+        // Sample and Output
+    }
+}
+
+__C void infer(struct Model const *model, unsigned int ntok,
+               unsigned int const *tokens, unsigned int nreq,
+               unsigned int const *req_lens, unsigned int const *req_pos,
+               struct KVCache *kv_caches, unsigned int *ans, float temperature,
+               unsigned int topk, float topp) {
+    auto ndev = model->dev.size();
+    auto threads = std::vector<std::thread>(ndev);
+    for (unsigned int idev = 0; idev < ndev; idev++) {
+        threads[idev] = std::thread(
+            infer_device, model->meta, model->dev[idev], idev, ndev, ntok,
+            tokens, nreq, req_lens, req_pos, kv_caches->k[idev],
+            kv_caches->v[idev], ans, temperature, topk, topp);
+    }
+    for (unsigned int idev = 0; idev < ndev; idev++) {
+        threads[idev].join();
+    }
 }
 
 __C void destroy_model(struct Model *model) {
