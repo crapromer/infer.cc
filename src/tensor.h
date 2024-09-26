@@ -2,6 +2,7 @@
 #define INFER_TENSOR_H
 
 #include "infini_infer.h"
+#include "utils.h"
 #include <future>
 #include <vector>
 
@@ -38,9 +39,12 @@ private:
     DataType _dtype;
     std::vector<index_t> _shape;
     std::vector<stride_t> _strides;
-    size_t offset;
+    infinirtMemory_t _data;
     std::shared_ptr<Storage> storage;
     infiniopTensorDescriptor_t _desc;
+
+    infinirtMemory_t data_impl(infinirtStream_t stream = nullptr) const;
+    Tensor slice_impl(size_t dim, size_t start, size_t len) const;
 
   public:
     static Tensor buffer(DataType dtype, const std::vector<index_t> &shape, DeviceType device, uint32_t device_id, infinirtStream_t stream = nullptr);
@@ -49,6 +53,8 @@ private:
     const Tensor slice(size_t dim, size_t start, size_t len) const;
     Tensor &dim_merge(size_t dim_start, size_t dim_end);
     Tensor &dim_split(size_t dim, const std::vector<size_t> &dims);
+    infinirtMemory_t data(infinirtStream_t stream = nullptr);
+    infinirtMemory_t const data(infinirtStream_t stream = nullptr) const;
     void *data_ptr(infinirtStream_t stream = nullptr);
     void const *data_ptr(infinirtStream_t stream = nullptr) const;
     void copy_from(const Tensor &src, infiniopHandle_t handle, infinirtStream_t stream = nullptr);
@@ -57,7 +63,19 @@ private:
     size_t ndim() const;
     DataType dtype() const;
     TensorDescriptorHolder desc() const;
+    bool is_contiguous() const;
     ~Tensor();
 };
+
+inline size_t dt_size(DataType dtype) {
+    switch (dtype) {
+    case DATA_TYPE_F16:
+        return 2;
+    case DATA_TYPE_F32:
+        return 4;
+    }
+    PANIC("Unsupported data type");
+    return 0;
+}
 
 #endif

@@ -7,6 +7,7 @@ const std::vector<stride_t> &Tensor::strides() const { return this->_strides; }
 size_t Tensor::ndim() const { return this->_shape.size(); }
 DataType Tensor::dtype() const { return this->_dtype; }
 
+
 TensorDescriptorHolder::TensorDescriptorHolder(
     DataType dtype, const std::vector<index_t> &shape,
     const std::vector<stride_t> &strides) {
@@ -48,8 +49,12 @@ Tensor Tensor::buffer(DataType dtype, const std::vector<index_t> &shape, DeviceT
         strides[i] = strides[i + 1] * shape[i + 1];
     }
     tensor._strides = strides;
-    tensor.offset = 0;
     tensor.storage = Storage::createAsync(size, device, device_id, stream);
+    tensor._data = (infinirtMemory_t)std::malloc(sizeof(InfinirtMemory));
+    tensor._data->ptr = tensor.storage->memory->ptr;
+    tensor._data->size = size;
+    tensor._data->device = device;
+    tensor._data->deviceId = device_id;
     return tensor;
 }
 
@@ -75,40 +80,50 @@ Tensor Tensor::weight(void *data, DataType dtype, const std::vector<index_t> &sh
         strides[i] = strides[i + 1] * shape[i + 1];
     }
     tensor._strides = strides;
-    tensor.offset = 0;
     if (device == DEVICE_CPU) {
         tensor.storage = Storage::make(data, size);
     } else {
         tensor.storage = Storage::create(size, device, device_id);
         infinirtMemcpyH2DAsync(tensor.storage->memory, data, size, nullptr);
     }
-
+    tensor._data = (infinirtMemory_t)std::malloc(sizeof(InfinirtMemory));
+    tensor._data->ptr = tensor.storage->memory->ptr;
+    tensor._data->size = size;
+    tensor._data->device = device;
+    tensor._data->deviceId = device_id;
     return tensor;
 }
 
-void *Tensor::data_ptr(infinirtStream_t stream)
-{
-    if (this->storage->event == nullptr)
-        return static_cast<char*>(this->storage->memory->ptr) + this->offset;
 
-    if (infinirtEventQuery(this->storage->event) == INFINIRT_STATUS_NOT_READY)
-    {
-        if (stream == nullptr)
-        {
+infinirtMemory_t Tensor::data_impl(infinirtStream_t stream) const{
+    if (this->storage->event == nullptr)
+        this->_data;
+
+    if (infinirtEventQuery(this->storage->event) == INFINIRT_STATUS_NOT_READY) {
+        if (stream == nullptr) {
             infinirtEventSynchronize(this->storage->event);
-            return static_cast<char*>(this->storage->memory->ptr) + this->offset;
-        }
-        else
-        {
+        } else {
             infinirtStreamWaitEvent(this->storage->event, stream);
         }
     }
 
-    return static_cast<char*>(this->storage->memory->ptr) + this->offset;
+    return this->_data;
+}
+
+infinirtMemory_t Tensor::data(infinirtStream_t stream) {
+    return this->data_impl(stream);
+}
+
+infinirtMemory_t const Tensor::data(infinirtStream_t stream) const {
+    return this->data_impl(stream);
+}
+
+void *Tensor::data_ptr(infinirtStream_t stream) {
+    return this->data_impl(stream)->ptr;
 }
 
 void const *Tensor::data_ptr(infinirtStream_t stream) const {
-    return static_cast<char const *>(this->data_ptr(stream));
+    return this->data_impl(stream)->ptr;
 }
 
 void Tensor::copy_from(const Tensor &src, infiniopHandle_t handle, infinirtStream_t stream) {

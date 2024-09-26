@@ -3,8 +3,7 @@
 #include <vector>
 #include <numeric>
 
-Tensor Tensor::slice(size_t dim, size_t start, size_t len)
-{
+Tensor Tensor::slice_impl(size_t dim, size_t start, size_t len) const {
     Tensor tensor;
     ASSERT(this->_shape[dim] <= start + len);
     auto new_shape = std::vector<index_t>(this->_shape);
@@ -13,14 +12,22 @@ Tensor Tensor::slice(size_t dim, size_t start, size_t len)
     tensor._dtype = this->_dtype;
     tensor._shape = new_shape;
     tensor._strides = std::vector<stride_t>(this->_strides);
-    tensor.offset = this->offset + start * this->_strides[dim];
+    tensor._data = (infinirtMemory_t)std::malloc(sizeof(InfinirtMemory));
+    tensor._data->ptr = this->_data->ptr + start * this->_strides[dim];
+    tensor._data->size =
+        std::accumulate(new_shape.begin(), new_shape.end(),
+                        dt_size(this->_dtype), std::multiplies<index_t>());
     tensor.storage = this->storage;
     return tensor;
 }
 
+Tensor Tensor::slice(size_t dim, size_t start, size_t len) {
+    return this->slice_impl(dim, start, len);
+}
+
 const Tensor Tensor::slice(size_t dim, size_t start, size_t len) const
 {
-    return this->slice(dim, start, len);
+    return this->slice_impl(dim, start, len);
 }
 
 Tensor &Tensor::dim_merge(size_t dim_start, size_t dim_end)

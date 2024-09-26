@@ -46,7 +46,42 @@ __C infinirtStatus_t infinirtEventCreate(infinirtEvent_t *pEvent, DeviceType dev
         return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
     }
 }
+__C infinirtStatus_t infinirtEventRecord(infinirtEvent_t event,
+                                         infinirtStream_t stream) {
+    if (event == nullptr)
+        return INFINIRT_STATUS_INVALID_ARGUMENT;
+    if (stream != nullptr && event->device != stream->device)
+        return INFINIRT_STATUS_DEVICE_MISMATCH;
+    switch (event->device) {
+    case DEVICE_NVIDIA:
+        return recordCudaEvent(event, stream);
 
+    default:
+        return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
+    }
+}
+__C infinirtStatus_t infinirtEventQuery(infinirtEvent_t event) {
+    if (event == nullptr)
+        return INFINIRT_STATUS_INVALID_ARGUMENT;
+    switch (event->device) {
+    case DEVICE_NVIDIA:
+        return queryCudaEvent(event);
+
+    default:
+        return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
+    }
+}
+__C infinirtStatus_t infinirtEventSynchronize(infinirtEvent_t event) {
+    if (event == nullptr)
+        return INFINIRT_STATUS_INVALID_ARGUMENT;
+    switch (event->device) {
+    case DEVICE_NVIDIA:
+        return synchronizeCudaEvent(event);
+
+    default:
+        return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
+    }
+}
 __C infinirtStatus_t infinirtEventDestroy(infinirtEvent_t event)
 {
     if (event == nullptr)
@@ -173,6 +208,23 @@ __C __export infinirtStatus_t infinirtMemcpyAsync(infinirtMemory_t dst,
                                                   const infinirtMemory_t src,
                                                   size_t size,
                                                   infinirtStream_t stream) {
-    // TODO: implement this function
-    return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
+    if (size == 0)
+        return INFINIRT_STATUS_SUCCESS;
+    if (dst == nullptr || src == nullptr)
+        return INFINIRT_STATUS_INVALID_ARGUMENT;
+    if (stream != nullptr &&
+        (dst->device != stream->device || dst->deviceId != stream->device_id))
+        return INFINIRT_STATUS_DEVICE_MISMATCH;
+    if (dst->device != src->device || dst->deviceId != src->deviceId)
+        return INFINIRT_STATUS_DEVICE_MISMATCH;
+    if (size > dst->size || size > src->size)
+        return INFINIRT_STATUS_ILLEGAL_MEMORY_ACCESS;
+
+    switch (dst->device) {
+    case DEVICE_NVIDIA:
+        return memcpyCudaAsync(dst, src, size, stream);
+
+    default:
+        return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
+    }
 }
