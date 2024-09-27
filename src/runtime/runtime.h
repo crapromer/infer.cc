@@ -4,13 +4,13 @@
 #include <stdint.h>
 #include <stddef.h>
 
-struct Stream{
+struct infinirtStream{
     DeviceType device;
     uint32_t device_id;
     void* stream;
 };
 
-struct Event{
+struct infinirtEvent{
     DeviceType device;
     uint32_t device_id;
     void* event;

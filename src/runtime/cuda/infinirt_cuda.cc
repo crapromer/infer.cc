@@ -29,7 +29,7 @@ infinirtStatus_t createCudaStream(infinirtStream_t *pStream,
     SWITCH_DEVICE(deviceId);
     cudaStream_t cuda_stream;
     CUDA_CALL(cudaStreamCreate(&cuda_stream));
-    infinirtStream_t stream = new Stream();
+    infinirtStream_t stream = new infinirtStream();
     stream->device = DEVICE_NVIDIA;
     stream->device_id = deviceId;
     stream->stream = cuda_stream;
@@ -46,7 +46,7 @@ infinirtStatus_t createCudaEvent(infinirtEvent_t *pEvent, uint32_t deviceId) {
     SWITCH_DEVICE(deviceId);
     cudaEvent_t cuda_event;
     CUDA_CALL(cudaEventCreate(&cuda_event));
-    infinirtEvent_t event = new Event();
+    infinirtEvent_t event = new infinirtEvent();
     event->device = DEVICE_NVIDIA;
     event->device_id = deviceId;
     event->event = cuda_event;

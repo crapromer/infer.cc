@@ -46,16 +46,16 @@ struct InfinirtMemory
 typedef struct InfinirtMemory *infinirtMemory_t;
 
 // Stream
-struct Stream;
-typedef struct Stream *infinirtStream_t;
+struct infinirtStream;
+typedef struct infinirtStream *infinirtStream_t;
 #define INFINIRT_NULL_STREAM nullptr
 __C __export infinirtStatus_t infinirtStreamCreate(infinirtStream_t *pStream, DeviceType device, uint32_t deviceId);
 __C __export infinirtStatus_t infinirtStreamDestroy(infinirtStream_t stream);
 __C __export infinirtStatus_t infinirtGetRawStream(void** ptr, infinirtStream_t stream);
 
 // Event
-struct Event;
-typedef struct Event *infinirtEvent_t;
+struct infinirtEvent;
+typedef struct infinirtEvent *infinirtEvent_t;
 __C __export infinirtStatus_t infinirtEventCreate(infinirtEvent_t *pEvent, DeviceType device, uint32_t deviceId);
 __C __export infinirtStatus_t infinirtEventRecord(infinirtEvent_t event, infinirtStream_t stream);
 __C __export infinirtStatus_t infinirtEventQuery(infinirtEvent_t event);
