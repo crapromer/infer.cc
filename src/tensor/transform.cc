@@ -13,7 +13,7 @@ Tensor Tensor::slice_impl(size_t dim, size_t start, size_t len) const {
     tensor._shape = new_shape;
     tensor._strides = std::vector<stride_t>(this->_strides);
     tensor._data = (infinirtMemory_t)std::malloc(sizeof(InfinirtMemory));
-    tensor._data->ptr = this->_data->ptr + start * this->_strides[dim];
+    tensor._data->ptr = static_cast<char *>(this->_data->ptr) + start * this->_strides[dim];
     tensor._data->size =
         std::accumulate(new_shape.begin(), new_shape.end(),
                         dt_size(this->_dtype), std::multiplies<index_t>());

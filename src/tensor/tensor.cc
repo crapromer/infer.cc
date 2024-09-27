@@ -6,6 +6,7 @@ const std::vector<index_t> &Tensor::shape() const { return this->_shape; }
 const std::vector<stride_t> &Tensor::strides() const { return this->_strides; }
 size_t Tensor::ndim() const { return this->_shape.size(); }
 DataType Tensor::dtype() const { return this->_dtype; }
+size_t Tensor::byte_size() const { return this->_data->size; }
 
 
 TensorDescriptorHolder::TensorDescriptorHolder(
@@ -41,7 +42,7 @@ Tensor Tensor::buffer(DataType dtype, const std::vector<index_t> &shape, DeviceT
     {
         tensor._shape = std::vector<index_t>(shape);
     }
-    size_t size = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<index_t>());
+    size_t size = std::accumulate(shape.begin(), shape.end(), dt_size(dtype), std::multiplies<index_t>());
     auto strides = std::vector<stride_t>(ndim);
     strides[ndim - 1] = 1;
     for (int i = ndim - 2; i >= 0; i--)
@@ -72,7 +73,7 @@ Tensor Tensor::weight(void *data, DataType dtype, const std::vector<index_t> &sh
     {
         tensor._shape = std::vector<index_t>(shape);
     }
-    size_t size = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<index_t>());
+    size_t size = std::accumulate(shape.begin(), shape.end(), dt_size(dtype), std::multiplies<index_t>());
     auto strides = std::vector<stride_t>(ndim);
     strides[ndim - 1] = 1;
     for (int i = ndim - 2; i >= 0; i--)

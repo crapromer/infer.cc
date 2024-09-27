@@ -3,7 +3,7 @@
 
 #include "infini_infer.h"
 #include "utils.h"
-#include <future>
+#include <memory>
 #include <vector>
 
 typedef uint64_t index_t;
@@ -41,7 +41,6 @@ private:
     std::vector<stride_t> _strides;
     infinirtMemory_t _data;
     std::shared_ptr<Storage> storage;
-    infiniopTensorDescriptor_t _desc;
 
     infinirtMemory_t data_impl(infinirtStream_t stream = nullptr) const;
     Tensor slice_impl(size_t dim, size_t start, size_t len) const;
@@ -63,8 +62,9 @@ private:
     size_t ndim() const;
     DataType dtype() const;
     TensorDescriptorHolder desc() const;
-    bool is_contiguous() const;
-    ~Tensor();
+    size_t byte_size() const;
+    // bool is_contiguous() const;
+    ~Tensor() = default;
 };
 
 inline size_t dt_size(DataType dtype) {
