@@ -3,7 +3,7 @@
 #include "../test.h"
 #include <vector>
 
-int test_weight_tensor(DeviceType deviceType) {
+int test_tensor_weight(DeviceType deviceType) {
     auto data =
         std::vector<float>{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
     auto result = std::vector<float>(10);
@@ -17,7 +17,7 @@ int test_weight_tensor(DeviceType deviceType) {
     return TEST_PASSED;
 }
 
-int test_buffer_tensor(DeviceType deviceType) {
+int test_tensor_buffer(DeviceType deviceType) {
     auto data =
         std::vector<float>{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
     auto result = std::vector<float>(10);
@@ -38,7 +38,34 @@ int test_buffer_tensor(DeviceType deviceType) {
     return TEST_PASSED;
 }
 
+int test_tensor_reshape(DeviceType deviceType) {
+    auto data = std::vector<float>{1.0, 2.0, 3.0, 4.0,  5.0,  6.0,
+                                   7.0, 8.0, 9.0, 10.0, 11.0, 12.0};
+    auto result = std::vector<float>(12);
+    auto tensor =
+        Tensor::weight(data.data(), DATA_TYPE_F32,
+                       std::vector<index_t>({2, 3, 2}), deviceType, 0);
+    TEST_EQUAL(tensor.dim_merge(1, 2).shape(), std::vector<index_t>({2, 6}));
+    TEST_EQUAL(tensor.dim_split(1, {2, 3}).shape(),
+               std::vector<index_t>({2, 2, 3}));
+    return TEST_PASSED;
+}
+
+int test_tensor_slice(DeviceType deviceType) {
+    auto data = std::vector<float>{1.0, 2.0, 3.0, 4.0,  5.0,  6.0,
+                                   7.0, 8.0, 9.0, 10.0, 11.0, 12.0};
+    auto result = std::vector<float>(12);
+    auto tensor =
+        Tensor::weight(data.data(), DATA_TYPE_F32,
+                       std::vector<index_t>({2, 3, 2}), deviceType, 0);
+    auto tensor1 = tensor.slice(0, 1, 2);
+    auto tensor2 = tensor.slice(1, 1, 1);
+    auto tensor3 = tensor.slice(2, 0, 1);
+
+}
+
 int main() {
-    RUN_TEST(test_weight_tensor(DEVICE_NVIDIA));
-    RUN_TEST(test_buffer_tensor(DEVICE_NVIDIA));
+    RUN_TEST(test_tensor_weight(DEVICE_NVIDIA));
+    RUN_TEST(test_tensor_buffer(DEVICE_NVIDIA));
+    RUN_TEST(test_tensor_reshape(DEVICE_NVIDIA));
 }

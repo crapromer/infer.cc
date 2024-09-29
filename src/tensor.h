@@ -64,7 +64,7 @@ private:
     TensorDescriptorHolder desc() const;
     size_t byte_size() const;
     // bool is_contiguous() const;
-    ~Tensor() = default;
+    ~Tensor();
 };
 
 inline size_t dt_size(DataType dtype) {

@@ -7,7 +7,7 @@ const std::vector<stride_t> &Tensor::strides() const { return this->_strides; }
 size_t Tensor::ndim() const { return this->_shape.size(); }
 DataType Tensor::dtype() const { return this->_dtype; }
 size_t Tensor::byte_size() const { return this->_data->size; }
-
+Tensor::~Tensor() { delete this->_data; }
 
 TensorDescriptorHolder::TensorDescriptorHolder(
     DataType dtype, const std::vector<index_t> &shape,

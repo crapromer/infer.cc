@@ -8,7 +8,7 @@
 
 #define TEST_TRUE(expr)                                                        \
     do {                                                                       \
-        if (!expr) {                                                           \
+        if (!(expr)) {                                                         \
             printf("Test failed: %s:%d: %s\n", __FILE__, __LINE__, #expr);     \
             return TEST_FAILED;                                                \
         }                                                                      \
