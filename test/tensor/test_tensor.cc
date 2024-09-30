@@ -45,9 +45,12 @@ int test_tensor_reshape(DeviceType deviceType) {
     auto tensor =
         Tensor::weight(data.data(), DATA_TYPE_F32,
                        std::vector<index_t>({2, 3, 2}), deviceType, 0);
-    TEST_EQUAL(tensor.dim_merge(1, 2).shape(), std::vector<index_t>({2, 6}));
-    TEST_EQUAL(tensor.dim_split(1, {2, 3}).shape(),
-               std::vector<index_t>({2, 2, 3}));
+    tensor.dim_merge(0, 1);
+    TEST_EQUAL(tensor.shape(), std::vector<index_t>({6, 2}));
+    TEST_EQUAL(tensor.strides(), std::vector<stride_t>({2, 1}));
+    tensor.dim_split(0, {3, 2});
+    TEST_EQUAL(tensor.shape(), std::vector<index_t>({3, 2, 2}));
+    TEST_EQUAL(tensor.strides(), std::vector<stride_t>({4, 2, 1}));
     return TEST_PASSED;
 }
 

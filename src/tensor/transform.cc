@@ -74,11 +74,15 @@ Tensor &Tensor::dim_split(size_t dim, const std::vector<size_t> &dims)
     for (size_t i = 0; i < dims.size(); i++)
     {
         new_shape.push_back(dims[i]);
-        new_strides.push_back(this->_strides[dim] / std::accumulate(dims.begin(), dims.begin() + i, 1, std::multiplies<index_t>()));
+        new_strides.push_back(this->_strides[dim] * this->_shape[dim] /
+                              std::accumulate(dims.begin(),
+                                              dims.begin() + i + 1, 1,
+                                              std::multiplies<index_t>()));
     }
     for (size_t i = dim + 1; i < this->_shape.size(); i++)
     {
         new_shape.push_back(this->_shape[i]);
+        new_strides.push_back(this->_strides[i]);
     }
     this->_shape = new_shape;
     this->_strides = new_strides;
