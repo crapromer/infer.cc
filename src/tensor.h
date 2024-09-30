@@ -52,6 +52,7 @@ private:
     const Tensor slice(size_t dim, size_t start, size_t len) const;
     Tensor &dim_merge(size_t dim_start, size_t dim_end);
     Tensor &dim_split(size_t dim, const std::vector<size_t> &dims);
+    Tensor &permute(const std::vector<size_t> &order);
     infinirtMemory_t data(infinirtStream_t stream = nullptr);
     infinirtMemory_t const data(infinirtStream_t stream = nullptr) const;
     void *data_ptr(infinirtStream_t stream = nullptr);

@@ -1,7 +1,8 @@
 #include "../tensor.h"
 #include "../utils.h"
-#include <vector>
+#include <algorithm>
 #include <numeric>
+#include <vector>
 
 Tensor Tensor::slice_impl(size_t dim, size_t start, size_t len) const {
     Tensor tensor;
@@ -78,6 +79,20 @@ Tensor &Tensor::dim_split(size_t dim, const std::vector<size_t> &dims)
     for (size_t i = dim + 1; i < this->_shape.size(); i++)
     {
         new_shape.push_back(this->_shape[i]);
+    }
+    this->_shape = new_shape;
+    this->_strides = new_strides;
+    return *this;
+}
+
+Tensor &Tensor::permute(const std::vector<size_t> &order) {
+    ASSERT_EQ(this->_shape.size(), order.size());
+    auto new_shape = std::vector<index_t>(order.size());
+    auto new_strides = std::vector<stride_t>(order.size());
+    for (size_t i = 0; i < order.size(); i++) {
+        ASSERT(std::find(order.begin(), order.end(), i) != order.end());
+        new_shape[i] = this->_shape[order[i]];
+        new_strides[i] = this->_strides[order[i]];
     }
     this->_shape = new_shape;
     this->_strides = new_strides;

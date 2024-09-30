@@ -13,7 +13,7 @@ inline void assert_true(int expr, const char *msg, const char *file, int line)
     }
 }
 
-#define ASSERT(expr) assert_true(expr, #expr " is false", __FILE__, __LINE__)
+#define ASSERT(expr) assert_true((expr), #expr " is false", __FILE__, __LINE__)
 #define ASSERT_EQ(a, b) assert_true((a) == (b), #a " != " #b, __FILE__, __LINE__)
 #define ASSERT_VALID_PTR(a) assert_true((a) != nullptr, #a " is nullptr", __FILE__, __LINE__)
 
