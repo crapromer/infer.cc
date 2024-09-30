@@ -75,10 +75,10 @@ target("infini_infer_test")
     set_languages("cxx17")
     add_includedirs("src")
     if has_config("nv-gpu") then
-        add_deps("nv-gpu")
-        add_files("test/tensor/*.cc")
+        add_deps("nv-gpu")   
     end
-
+    add_files("test/test.cc")
+    add_files("test/tensor/*.cc")
     add_files("src/runtime/runtime.cc")
     add_files("src/models/*.cc")
     add_files("src/tensor/*.cc")

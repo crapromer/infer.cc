@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../include/infinirt.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -24,3 +25,5 @@
             printf("%s PASSED\n", #test);                                      \
         }                                                                      \
     } while (0)
+
+void test_tensor(DeviceType);
