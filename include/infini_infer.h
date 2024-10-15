@@ -22,13 +22,14 @@ typedef enum
 {
     DATA_TYPE_F32,
     DATA_TYPE_F16,
+    DATA_TYPE_U64,
 } DataType;
 
 ////////////////// Models //////////////////
 typedef struct
 {
-    DataType dt_norm, dt_mat;
-    unsigned int nlayer, nh, nkvh, dh, di, dctx, dvoc;
+    DataType dt_logits, dt_norm, dt_mat;
+    unsigned int nlayer, d, nh, nkvh, dh, di, dctx, dvoc;
     float epsilon, theta;
 } LlamaMeta;
 

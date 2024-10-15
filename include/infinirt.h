@@ -36,14 +36,6 @@ typedef enum
     INFINIRT_STATUS_NOT_READY = 7,
 } infinirtStatus_t;
 
-struct InfinirtMemory
-{
-    void *ptr;
-    size_t size;
-    DeviceType device;
-    uint32_t deviceId;
-};
-typedef struct InfinirtMemory *infinirtMemory_t;
 
 // Stream
 struct infinirtStream;
@@ -64,11 +56,11 @@ __C __export infinirtStatus_t infinirtEventDestroy(infinirtEvent_t event);
 __C __export infinirtStatus_t infinirtStreamWaitEvent(infinirtEvent_t event, infinirtStream_t stream);
 
 // Memory
-__C __export infinirtStatus_t infinirtMalloc(infinirtMemory_t *pMemory, DeviceType device, uint32_t deviceId, size_t size);
-__C __export infinirtStatus_t infinirtMallocAsync(infinirtMemory_t *pMemory, DeviceType device, uint32_t deviceId, size_t size, infinirtStream_t stream);
-__C __export infinirtStatus_t infinirtFree(infinirtMemory_t ptr);
-__C __export infinirtStatus_t infinirtFreeAsync(infinirtMemory_t ptr, infinirtStream_t stream);
-__C __export infinirtStatus_t infinirtMemcpyH2DAsync(infinirtMemory_t dst, const void *src, size_t size, infinirtStream_t stream);
-__C __export infinirtStatus_t infinirtMemcpyD2H(void *dst, const infinirtMemory_t src, size_t size);
-__C __export infinirtStatus_t infinirtMemcpyAsync(infinirtMemory_t dst, const infinirtMemory_t src, size_t size, infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtMalloc(void **pMemory, DeviceType device, uint32_t deviceId, size_t size);
+__C __export infinirtStatus_t infinirtMallocAsync(void **pMemory, DeviceType device, uint32_t deviceId, size_t size, infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtFree(void *ptr, DeviceType device, uint32_t deviceId);
+__C __export infinirtStatus_t infinirtFreeAsync(void *ptr, DeviceType device, uint32_t deviceId, infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtMemcpyH2DAsync(void *dst, DeviceType device, uint32_t deviceId, const void *src, size_t size, infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtMemcpyD2H(void *dst, const void* src, DeviceType device, uint32_t deviceId, size_t size);
+__C __export infinirtStatus_t infinirtMemcpyAsync(void *dst, const void* src, DeviceType device, uint32_t deviceId, size_t size, infinirtStream_t stream);
 #endif

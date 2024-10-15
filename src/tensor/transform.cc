@@ -4,39 +4,40 @@
 #include <numeric>
 #include <vector>
 
-Tensor Tensor::slice_impl(size_t dim, size_t start, size_t len) const {
-    Tensor tensor;
+std::shared_ptr<Tensor> Tensor::slice_impl(size_t dim, size_t start, size_t len) const {
+    std::shared_ptr<Tensor> tensor = std::make_shared<Tensor>();
     ASSERT(this->_shape[dim] >= start + len);
     auto new_shape = std::vector<index_t>(this->_shape);
     new_shape[dim] = len;
 
-    tensor._dtype = this->_dtype;
-    tensor._shape = new_shape;
-    tensor._strides = std::vector<stride_t>(this->_strides);
-    tensor._data = (infinirtMemory_t)std::malloc(sizeof(InfinirtMemory));
-    tensor._data->ptr = static_cast<char *>(this->_data->ptr) +
+    tensor->_dtype = this->_dtype;
+    tensor->_shape = new_shape;
+    tensor->_strides = std::vector<stride_t>(this->_strides);
+    tensor->_data = static_cast<char *>(this->_data) +
                         start * this->_strides[dim] * dt_size(this->_dtype);
-    tensor._data->size =
+    tensor->_size =
         std::accumulate(new_shape.begin(), new_shape.end(),
                         dt_size(this->_dtype), std::multiplies<index_t>());
-    tensor.storage = this->storage;
+    tensor->storage = this->storage;
+    infiniopCreateTensorDescriptor(&tensor->_desc, tensor->_shape.size(), tensor->_shape.data(),
+                                   tensor->_strides.data(), dt_layout(tensor->_dtype));
     return tensor;
 }
 
-Tensor Tensor::slice(size_t dim, size_t start, size_t len) {
+std::shared_ptr<Tensor> Tensor::slice(size_t dim, size_t start, size_t len) {
     return this->slice_impl(dim, start, len);
 }
 
-const Tensor Tensor::slice(size_t dim, size_t start, size_t len) const
+std::shared_ptr<Tensor const> Tensor::slice(size_t dim, size_t start, size_t len) const
 {
     return this->slice_impl(dim, start, len);
 }
 
-Tensor &Tensor::dim_merge(size_t dim_start, size_t dim_end)
+std::shared_ptr<Tensor> Tensor::dim_merge(size_t dim_start, size_t dim_end)
 {
     ASSERT(dim_start <= dim_end && dim_end < this->_shape.size());
     if (dim_start == dim_end)
-        return *this;
+        return shared_from_this();
 
     auto new_shape = std::vector<index_t>();
     auto new_strides = std::vector<stride_t>();
@@ -58,10 +59,14 @@ Tensor &Tensor::dim_merge(size_t dim_start, size_t dim_end)
     }
     this->_shape = new_shape;
     this->_strides = new_strides;
-    return *this;
+    infiniopDestroyTensorDescriptor(this->_desc);
+    infiniopCreateTensorDescriptor(&this->_desc, this->_shape.size(), this->_shape.data(),
+                                   this->_strides.data(), dt_layout(this->_dtype));
+
+    return shared_from_this();
 }
 
-Tensor &Tensor::dim_split(size_t dim, const std::vector<size_t> &dims)
+std::shared_ptr<Tensor> Tensor::dim_split(size_t dim, const std::vector<size_t> &dims)
 {
     ASSERT_EQ(this->_shape[dim], std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<index_t>()));
     auto new_shape = std::vector<index_t>();
@@ -86,10 +91,13 @@ Tensor &Tensor::dim_split(size_t dim, const std::vector<size_t> &dims)
     }
     this->_shape = new_shape;
     this->_strides = new_strides;
-    return *this;
+    infiniopDestroyTensorDescriptor(this->_desc);
+    infiniopCreateTensorDescriptor(&this->_desc, this->_shape.size(), this->_shape.data(),
+                                   this->_strides.data(), dt_layout(this->_dtype));
+    return shared_from_this();
 }
 
-Tensor &Tensor::permute(const std::vector<size_t> &order) {
+std::shared_ptr<Tensor> Tensor::permute(const std::vector<size_t> &order) {
     ASSERT_EQ(this->_shape.size(), order.size());
     auto new_shape = std::vector<index_t>(order.size());
     auto new_strides = std::vector<stride_t>(order.size());
@@ -100,5 +108,8 @@ Tensor &Tensor::permute(const std::vector<size_t> &order) {
     }
     this->_shape = new_shape;
     this->_strides = new_strides;
-    return *this;
+    infiniopDestroyTensorDescriptor(this->_desc);
+    infiniopCreateTensorDescriptor(&this->_desc, this->_shape.size(), this->_shape.data(),
+                                   this->_strides.data(), dt_layout(this->_dtype));
+    return shared_from_this();
 }

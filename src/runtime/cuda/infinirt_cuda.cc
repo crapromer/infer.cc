@@ -87,67 +87,55 @@ infinirtStatus_t synchronizeCudaEvent(infinirtEvent_t event) {
     return INFINIRT_STATUS_SUCCESS;
 }
 
-infinirtStatus_t mallocCuda(infinirtMemory_t *pMemory, uint32_t deviceId,
-                            size_t size) {
+infinirtStatus_t mallocCuda(void **pMemory, uint32_t deviceId, size_t size) {
     SWITCH_DEVICE(deviceId);
     void *cuda_ptr;
     CUDA_CALL(cudaMalloc(&cuda_ptr, size));
-    infinirtMemory_t memory = new InfinirtMemory();
-    memory->device = DEVICE_NVIDIA;
-    memory->deviceId = deviceId;
-    memory->ptr = cuda_ptr;
-    memory->size = size;
-    *pMemory = memory;
+    *pMemory = cuda_ptr;
     return INFINIRT_STATUS_SUCCESS;
 }
 
-infinirtStatus_t mallocCudaAsync(infinirtMemory_t *pMemory, uint32_t deviceId,
-                                 size_t size, infinirtStream_t stream) {
+infinirtStatus_t mallocCudaAsync(void **pMemory, uint32_t deviceId, size_t size,
+                                 infinirtStream_t stream) {
     SWITCH_DEVICE(deviceId);
     void *cuda_ptr;
     CUDA_CALL(cudaMallocAsync(&cuda_ptr, size, getCudaStream(stream)));
-    infinirtMemory_t memory = new InfinirtMemory();
-    memory->device = DEVICE_NVIDIA;
-    memory->deviceId = deviceId;
-    memory->ptr = cuda_ptr;
-    memory->size = size;
-    *pMemory = memory;
+    *pMemory = cuda_ptr;
     return INFINIRT_STATUS_SUCCESS;
 }
 
-infinirtStatus_t freeCuda(infinirtMemory_t ptr) {
-    SWITCH_DEVICE(ptr->deviceId);
-    CUDA_CALL(cudaFree(ptr->ptr));
-    delete ptr;
+infinirtStatus_t freeCuda(void *ptr, uint32_t deviceId) {
+    SWITCH_DEVICE(deviceId);
+    CUDA_CALL(cudaFree(ptr));
     return INFINIRT_STATUS_SUCCESS;
 }
 
-infinirtStatus_t freeCudaAsync(infinirtMemory_t ptr, infinirtStream_t stream) {
-    SWITCH_DEVICE(ptr->deviceId);
-    CUDA_CALL(cudaFreeAsync(ptr->ptr, getCudaStream(stream)));
-    delete ptr;
+infinirtStatus_t freeCudaAsync(void *ptr, uint32_t deviceId,
+                               infinirtStream_t stream) {
+    SWITCH_DEVICE(deviceId);
+    CUDA_CALL(cudaFreeAsync(ptr, getCudaStream(stream)));
     return INFINIRT_STATUS_SUCCESS;
 }
-infinirtStatus_t memcpyHost2CudaAsync(infinirtMemory_t dst, const void *src,
-                                      size_t size, infinirtStream_t stream) {
-    SWITCH_DEVICE(dst->deviceId);
-    CUDA_CALL(cudaMemcpyAsync(dst->ptr, src, size, cudaMemcpyHostToDevice,
+infinirtStatus_t memcpyHost2CudaAsync(void *dst, uint32_t deviceId,
+                                      const void *src, size_t size,
+                                      infinirtStream_t stream) {
+    SWITCH_DEVICE(deviceId);
+    CUDA_CALL(cudaMemcpyAsync(dst, src, size, cudaMemcpyHostToDevice,
                               getCudaStream(stream)));
     return INFINIRT_STATUS_SUCCESS;
 }
 
-infinirtStatus_t memcpyCuda2Host(void *dst, const infinirtMemory_t src,
+infinirtStatus_t memcpyCuda2Host(void *dst, const void *src, uint32_t deviceId,
                                  size_t size) {
-    SWITCH_DEVICE(src->deviceId);
-    CUDA_CALL(cudaMemcpy(dst, src->ptr, size, cudaMemcpyDeviceToHost));
+    SWITCH_DEVICE(deviceId);
+    CUDA_CALL(cudaMemcpy(dst, src, size, cudaMemcpyDeviceToHost));
     return INFINIRT_STATUS_SUCCESS;
 }
 
-infinirtStatus_t memcpyCudaAsync(infinirtMemory_t dst,
-                                 const infinirtMemory_t src, size_t size,
-                                 infinirtStream_t stream) {
-    SWITCH_DEVICE(src->deviceId);
-    CUDA_CALL(cudaMemcpyAsync(dst->ptr, src->ptr, size,
-                              cudaMemcpyDeviceToDevice, getCudaStream(stream)));
+infinirtStatus_t memcpyCudaAsync(void *dst, const void *src, uint32_t deviceId,
+                                 size_t size, infinirtStream_t stream) {
+    SWITCH_DEVICE(deviceId);
+    CUDA_CALL(cudaMemcpyAsync(dst, src, size, cudaMemcpyDeviceToDevice,
+                              getCudaStream(stream)));
     return INFINIRT_STATUS_SUCCESS;
 }

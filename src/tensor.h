@@ -11,60 +11,64 @@ typedef int64_t stride_t;
 
 struct Storage
 {
-    infinirtMemory_t memory;
+    void *memory;
+    size_t size;
     DeviceType device;
     uint32_t deviceId;
     infinirtEvent_t event;
 
-    static std::shared_ptr<Storage> make(void *data, size_t size);
+    static std::shared_ptr<Storage> host(void *data, size_t size);
     static std::shared_ptr<Storage> create(size_t size, DeviceType device, uint32_t device_id);
     static std::shared_ptr<Storage> createAsync(size_t size, DeviceType device, uint32_t device_id, infinirtStream_t stream = nullptr);
     ~Storage();
 };
 
-class TensorDescriptorHolder {
-  private:
-    infiniopTensorDescriptor_t _desc;
 
-  public:
-    TensorDescriptorHolder(DataType dtype, const std::vector<index_t> &shape,
-                           const std::vector<stride_t> &strides);
-    infiniopTensorDescriptor_t get() const { return _desc; }
-    ~TensorDescriptorHolder() { infiniopDestroyTensorDescriptor(_desc); }
-};
-
-class Tensor
+class Tensor: public std::enable_shared_from_this<Tensor>
 {
 private:
     DataType _dtype;
     std::vector<index_t> _shape;
     std::vector<stride_t> _strides;
-    infinirtMemory_t _data;
+    void *_data;
+    index_t _size;
     std::shared_ptr<Storage> storage;
+    infiniopTensorDescriptor_t _desc;
 
-    infinirtMemory_t data_impl(infinirtStream_t stream = nullptr) const;
-    Tensor slice_impl(size_t dim, size_t start, size_t len) const;
+    void *data_impl(index_t offset, infinirtStream_t stream = nullptr) const;
+    std::shared_ptr<Tensor> slice_impl(size_t dim, size_t start,
+                                       size_t len) const;
 
   public:
-    static Tensor buffer(DataType dtype, const std::vector<index_t> &shape, DeviceType device, uint32_t device_id, infinirtStream_t stream = nullptr);
-    static Tensor weight(void *data, DataType dtype, const std::vector<index_t> &shape, DeviceType device, uint32_t device_id);
-    Tensor slice(size_t dim, size_t start, size_t len);
-    const Tensor slice(size_t dim, size_t start, size_t len) const;
-    Tensor &dim_merge(size_t dim_start, size_t dim_end);
-    Tensor &dim_split(size_t dim, const std::vector<size_t> &dims);
-    Tensor &permute(const std::vector<size_t> &order);
-    infinirtMemory_t data(infinirtStream_t stream = nullptr);
-    infinirtMemory_t const data(infinirtStream_t stream = nullptr) const;
-    void *data_ptr(infinirtStream_t stream = nullptr);
-    void const *data_ptr(infinirtStream_t stream = nullptr) const;
-    void copy_from(const Tensor &src, infiniopHandle_t handle, infinirtStream_t stream = nullptr);
+    static std::shared_ptr<Tensor> buffer(DataType dtype,
+                                          const std::vector<index_t> &shape,
+                                          DeviceType device, uint32_t device_id,
+                                          infinirtStream_t stream = nullptr);
+    static std::shared_ptr<Tensor> weight(void *data, DataType dtype,
+                                          const std::vector<index_t> &shape,
+                                          DeviceType device,
+                                          uint32_t device_id);
+    std::shared_ptr<Tensor> slice(size_t dim, size_t start, size_t len);
+    std::shared_ptr<Tensor const> slice(size_t dim, size_t start,
+                                        size_t len) const;
+    std::shared_ptr<Tensor> dim_merge(size_t dim_start, size_t dim_end);
+    std::shared_ptr<Tensor> dim_split(size_t dim, const std::vector<size_t> &dims);
+    std::shared_ptr<Tensor> permute(const std::vector<size_t> &order);
+    void *data(infinirtStream_t stream = nullptr);
+    void const *data(infinirtStream_t stream = nullptr) const;
+    void *data(index_t offset, infinirtStream_t stream = nullptr);
+    void const *data(index_t offset, infinirtStream_t stream = nullptr) const;
+    void copy_from(std::shared_ptr<Tensor const> src, infiniopHandle_t handle,
+                   infinirtStream_t stream = nullptr);
     const std::vector<index_t> &shape() const;
     const std::vector<stride_t> &strides() const;
     size_t ndim() const;
     DataType dtype() const;
-    TensorDescriptorHolder desc() const;
+    infiniopTensorDescriptor_t desc() const;
     size_t byte_size() const;
-    // bool is_contiguous() const;
+    DeviceType device_type() const;
+    uint32_t device_id() const;
+
     ~Tensor();
 };
 
@@ -74,9 +78,23 @@ inline size_t dt_size(DataType dtype) {
         return 2;
     case DATA_TYPE_F32:
         return 4;
+    case DATA_TYPE_U64:
+        return 8;
     }
     PANIC("Unsupported data type");
     return 0;
+}
+
+inline DataLayout dt_layout(DataType dtype) {
+    DataLayout layout;
+    if (dtype == DATA_TYPE_F16) {
+        layout = F16;
+    } else if (dtype == DATA_TYPE_F32) {
+        layout = F32;
+    } else if (dtype == DATA_TYPE_U64) {
+        layout = U64;
+    }
+    return layout;
 }
 
 #endif

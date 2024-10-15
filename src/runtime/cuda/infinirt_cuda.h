@@ -18,11 +18,11 @@ infinirtStatus_t recordCudaEvent(infinirtEvent_t event, infinirtStream_t stream)
 infinirtStatus_t queryCudaEvent(infinirtEvent_t event) IMPL_WITH_CUDA
 infinirtStatus_t synchronizeCudaEvent(infinirtEvent_t event) IMPL_WITH_CUDA
 
-infinirtStatus_t mallocCuda(infinirtMemory_t *pMemory, uint32_t deviceId, size_t size) IMPL_WITH_CUDA
-infinirtStatus_t mallocCudaAsync(infinirtMemory_t *pMemory, uint32_t deviceId, size_t size, infinirtStream_t stream) IMPL_WITH_CUDA
-infinirtStatus_t freeCuda(infinirtMemory_t ptr) IMPL_WITH_CUDA
-infinirtStatus_t freeCudaAsync(infinirtMemory_t ptr, infinirtStream_t stream) IMPL_WITH_CUDA
-infinirtStatus_t memcpyHost2CudaAsync(infinirtMemory_t dst, const void *src, size_t size, infinirtStream_t stream) IMPL_WITH_CUDA
-infinirtStatus_t memcpyCuda2Host(void *dst, const infinirtMemory_t src, size_t size) IMPL_WITH_CUDA
-infinirtStatus_t memcpyCudaAsync(infinirtMemory_t dst, const infinirtMemory_t src, size_t size, infinirtStream_t stream) IMPL_WITH_CUDA
+infinirtStatus_t mallocCuda(void **pMemory, uint32_t deviceId, size_t size) IMPL_WITH_CUDA
+infinirtStatus_t mallocCudaAsync(void **pMemory, uint32_t deviceId, size_t size, infinirtStream_t stream) IMPL_WITH_CUDA
+infinirtStatus_t freeCuda(void *ptr, uint32_t deviceId) IMPL_WITH_CUDA
+infinirtStatus_t freeCudaAsync(void *ptr, uint32_t deviceId, infinirtStream_t stream) IMPL_WITH_CUDA
+infinirtStatus_t memcpyHost2CudaAsync(void *dst, uint32_t deviceId, const void *src, size_t size, infinirtStream_t stream) IMPL_WITH_CUDA
+infinirtStatus_t memcpyCuda2Host(void *dst, const void *src, uint32_t deviceId, size_t size) IMPL_WITH_CUDA
+infinirtStatus_t memcpyCudaAsync(void *dst, const void *src, uint32_t deviceId, size_t size, infinirtStream_t stream) IMPL_WITH_CUDA
 #endif
