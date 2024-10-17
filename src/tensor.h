@@ -23,6 +23,23 @@ struct Storage
     ~Storage();
 };
 
+struct SliceParams {
+    size_t dim;
+    size_t start;
+    size_t len;
+};
+
+class TensorDesc {
+  private:
+    infiniopTensorDescriptor_t _desc;
+
+  public:
+    static std::shared_ptr<TensorDesc>
+    create(DataType dtype, const std::vector<index_t> &shape,
+           const std::vector<stride_t> &strides);
+    infiniopTensorDescriptor_t get() const { return _desc; };
+    ~TensorDesc();
+};
 
 class Tensor: public std::enable_shared_from_this<Tensor>
 {
@@ -36,8 +53,8 @@ private:
     infiniopTensorDescriptor_t _desc;
 
     void *data_impl(index_t offset, infinirtStream_t stream = nullptr) const;
-    std::shared_ptr<Tensor> slice_impl(size_t dim, size_t start,
-                                       size_t len) const;
+    std::shared_ptr<Tensor>
+    slice_impl(const std::vector<SliceParams> &slices) const;
 
   public:
     static std::shared_ptr<Tensor> buffer(DataType dtype,
@@ -51,6 +68,9 @@ private:
     std::shared_ptr<Tensor> slice(size_t dim, size_t start, size_t len);
     std::shared_ptr<Tensor const> slice(size_t dim, size_t start,
                                         size_t len) const;
+    std::shared_ptr<Tensor> slice(const std::vector<SliceParams> &slices);
+    std::shared_ptr<Tensor const>
+    slice(const std::vector<SliceParams> &slices) const;
     std::shared_ptr<Tensor> dim_merge(size_t dim_start, size_t dim_end);
     std::shared_ptr<Tensor> dim_split(size_t dim, const std::vector<size_t> &dims);
     std::shared_ptr<Tensor> permute(const std::vector<size_t> &order);
@@ -64,7 +84,7 @@ private:
     const std::vector<stride_t> &strides() const;
     size_t ndim() const;
     DataType dtype() const;
-    infiniopTensorDescriptor_t desc() const;
+    std::shared_ptr<TensorDesc> desc() const;
     size_t byte_size() const;
     DeviceType device_type() const;
     uint32_t device_id() const;

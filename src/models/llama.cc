@@ -3,6 +3,7 @@
 #include "infini_infer.h"
 #include "infinirt.h"
 #include "llama_weights.h"
+#include <random>
 #include <thread>
 #include <vector>
 
@@ -13,7 +14,8 @@ struct DeviceResource
     unsigned int device_id;
     infiniopHandle_t handle;
     // Weights
-    std::shared_ptr<Tensor> w_in_embd, w_out_norm, w_out_embd;
+    std::shared_ptr<Tensor> w_in_embd, w_out_norm, w_out_embd, sin_table,
+        cos_table;
     std::vector<std::shared_ptr<Tensor>> w_attn_norm, w_attn_qkv, w_attn_out,
         w_ffn_norm, w_ffn_gate_up, w_ffn_down;
     // Streams
@@ -52,6 +54,8 @@ create_device_resource(LlamaMeta const *meta, LlamaWeights const *weights,
                           get_in_embd(meta, weights, device, dev_id),
                           get_out_norm(meta, weights, device, dev_id),
                           get_out_embd(meta, weights, device, dev_id),
+                          get_sin_table(meta, device, dev_id),
+                          get_cos_table(meta, device, dev_id),
                           w_attn_norm,
                           w_attn_qkv,
                           w_attn_out,
@@ -146,10 +150,8 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
                   unsigned int idev, unsigned int ndev, unsigned int ntok,
                   unsigned int const *tokens, unsigned int nreq,
                   unsigned int const *req_lens, unsigned int const *req_pos,
-                  std::vector<std::shared_ptr<Tensor>> k_cache,
-                  std::vector<std::shared_ptr<Tensor>> v_cache,
-                  unsigned int *ans, float temperature, unsigned int topk,
-                  float topp) {
+                  struct KVCache **kv_caches, unsigned int *ans,
+                  float temperature, unsigned int topk, float topp) {
     auto nlayer = meta.nlayer;
     auto nkvh = meta.nkvh / ndev;
     auto nh = meta.nh / ndev;
@@ -163,78 +165,239 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
     auto stream_compute = rsrc.stream_compute;
     auto stream_data = rsrc.stream_data;
     auto stream_cache = rsrc.stream_cache;
+    void *stream_compute_raw;
+    infinirtGetRawStream(&stream_compute_raw, stream_compute);
 
     // Allocate buffers
     auto logits_in =
         Tensor::buffer(dt_logits, {ntok, d}, device, device_id, stream_data);
     auto logits_out =
         Tensor::buffer(dt_logits, {ntok, d}, device, device_id, stream_data);
-    auto q_buf = Tensor::buffer(dt_logits, {ntok, nh * dh}, device, device_id,
+    auto qkv_buf = Tensor::buffer(dt_logits, {ntok, (nkvh * 2 + nh) * dh},
+                                  device, device_id, stream_data);
+    auto o_buf = Tensor::buffer(dt_logits, {ntok, nh * dh}, device, device_id,
                                 stream_data);
-    auto gate_up_buf = Tensor::buffer(dt_logits, {ntok, 2 * di}, device,
-                                      device_id, stream_data);
+    auto result_buf =
+        Tensor::buffer(DATA_TYPE_U64, {nreq}, device, device_id, stream_data);
+    auto result_cpu = std::vector<uint64_t>(nreq);
+    // Prepare inputs
     auto batch_pos_ids = std::vector<index_t>(ntok);
-    index_t max_len = 0;
     index_t req_start = 0;
     for (unsigned int req = 0; req < nreq; req++) {
         for (unsigned int i = 0; i < req_lens[req]; i++) {
             batch_pos_ids[req_start + i] = req_pos[req] + i;
         }
         req_start += req_lens[req];
-        max_len = std::max(max_len, (index_t)req_lens[req]);
     }
-    auto att_scores_buf = Tensor::buffer(dt_logits, {nh * max_len * max_len},
-                                         device, device_id, stream_data);
-
-    // Prepare inputs
     if (rsrc.device == DEVICE_CPU) {
-        auto pos_ids_buf = Tensor::weight(batch_pos_ids.data(), DATA_TYPE_U64,
+        auto pos_ids_buf = Tensor::weight((void *)req_pos, DATA_TYPE_U64,
                                           {ntok}, rsrc.device, rsrc.device_id);
     } else {
         auto pos_ids_buf = Tensor::buffer(DATA_TYPE_U64, {ntok}, rsrc.device,
                                           rsrc.device_id, rsrc.stream_compute);
         infinirtMemcpyH2DAsync(pos_ids_buf->data(rsrc.stream_compute), device,
-                               device_id, batch_pos_ids.data(),
-                               sizeof(uint64_t) * ntok, rsrc.stream_compute);
+                               device_id, req_pos, sizeof(uint64_t) * ntok,
+                               rsrc.stream_compute);
     }
+    for (unsigned int i = 0; i < ntok; i++) {
+        infinirtMemcpyH2DAsync(
+            logits_in->data(i * d, stream_compute), device, device_id,
+            rsrc.w_in_embd->data(tokens[i] * d, stream_compute),
+            dt_size(dt_logits) * d, stream_compute);
+    }
+
+    // Prepare operators and workspace
+    void *workspace;
+    size_t workspace_size = 0, temp_size = 0;
+    infiniopRMSNormDescriptor_t desc_norm;
+    RUN_INFINI(infiniopCreateRMSNormDescriptor(
+        rsrc.handle, &desc_norm, logits_in->desc()->get(),
+        logits_out->desc()->get(), rsrc.w_attn_norm[0]->desc()->get(),
+        meta.epsilon));
+    RUN_INFINI(infiniopGetRMSNormWorkspaceSize(desc_norm, &workspace_size));
+    infiniopMatmulDescriptor_t desc_attn_qkv, desc_attn_o;
+    RUN_INFINI(infiniopCreateMatmulDescriptor(
+        rsrc.handle, &desc_attn_qkv, qkv_buf->desc()->get(), 1.0,
+        logits_in->desc()->get(), rsrc.w_attn_qkv[0]->desc()->get(), 0.0));
+    RUN_INFINI(infiniopCreateMatmulDescriptor(
+        rsrc.handle, &desc_attn_o, logits_in->desc()->get(), 1.0,
+        o_buf->desc()->get(), rsrc.w_attn_out[0]->desc()->get(),
+        idev == 0 ? 1.0 : 0.0)); // only rank 0 adds residual
+    RUN_INFINI(infiniopGetMatmulWorkspaceSize(desc_attn_qkv, &temp_size));
+    workspace_size = std::max(workspace_size, temp_size);
+    RUN_INFINI(infiniopGetMatmulWorkspaceSize(desc_attn_o, &temp_size));
+    workspace_size = std::max(workspace_size, temp_size);
+    infiniopRoPEDescriptor_t desc_rope_q, desc_rope_k;
+    qkv_buf->dim_split(1, {nh + nkvh * 2, dh}); // (ntok, nh + 2 * nkvh, dh)
+    RUN_INFINI(infiniopCreateRoPEDescriptor(
+        rsrc.handle, &desc_rope_q, qkv_buf->slice(1, 0, nh)->desc()->get(),
+        pos_ids_buf->desc()->get(), rsrc.sin_table->desc()->get(),
+        rsrc.cos_table->desc()->get()));
+    RUN_INFINI(infiniopGetRoPEWorkspaceSize(desc_rope_q, &temp_size));
+    workspace_size = std::max(workspace_size, temp_size);
+    RUN_INFINI(infiniopCreateRoPEDescriptor(
+        rsrc.handle, &desc_rope_k, qkv_buf->slice(1, nh, nkvh)->desc()->get(),
+        pos_ids_buf->desc()->get(), rsrc.sin_table->desc()->get(),
+        rsrc.cos_table->desc()->get()));
+    RUN_INFINI(infiniopGetRoPEWorkspaceSize(desc_rope_k, &temp_size));
+    workspace_size = std::max(workspace_size, temp_size);
+    infiniopMLPDescriptor_t desc_mlp;
+    RUN_INFINI(infiniopCreateMLPDescriptor(
+        rsrc.handle, &desc_mlp, logits_in->desc()->get(),
+        logits_out->desc()->get(), rsrc.w_ffn_gate_up[0]->desc()->get(),
+        rsrc.w_ffn_down[0]->desc()->get(), 1.0, idev == 0));
+    RUN_INFINI(infiniopGetMLPWorkspaceSize(desc_mlp, &temp_size));
+    workspace_size = std::max(workspace_size, temp_size);
+    auto desc_attns = std::vector<infiniopAttentionDescriptor_t>(nreq);
+    size_t token_offset = 0;
+    o_buf->dim_split(1, {nh, dh});
+    for (unsigned int req = 0; req < nreq; req++) {
+        auto past_len = req_pos[req];
+        auto seq_len = req_lens[req];
+        auto q = qkv_buf->slice({{0, token_offset, seq_len}, {1, 0, nh}});
+        auto k = qkv_buf->slice({{0, token_offset, seq_len}, {1, nh, nkvh}});
+        auto v =
+            qkv_buf->slice({{0, token_offset, seq_len}, {1, nh + nkvh, nkvh}});
+        auto k_cache = kv_caches[req]->k[idev][0];
+        auto v_cache = kv_caches[req]->v[idev][0];
+        RUN_INFINI(infiniopCreateAttentionDescriptor(
+            rsrc.handle, &desc_attns[req], o_buf->desc()->get(),
+            q->desc()->get(), k->desc()->get(), v->desc()->get(),
+            k_cache->desc()->get(), v_cache->desc()->get(), past_len));
+        RUN_INFINI(
+            infiniopGetAttentionWorkspaceSize(desc_attns[req], &temp_size));
+        workspace_size = std::max(workspace_size, temp_size);
+        token_offset += seq_len;
+    }
+    infiniopRandomSampleDescriptor_t desc_sample;
+    RUN_INFINI(infiniopCreateRandomSampleDescriptor(
+        rsrc.handle, &desc_sample,
+        TensorDesc::create(DATA_TYPE_U64, {1}, {1}).get(),
+        TensorDesc::create(dt_logits, {d}, {1}).get()));
+    // Allocate workspace
+    RUN_INFINI(infinirtMallocAsync(&workspace, device, device_id,
+                                   workspace_size, stream_compute));
 
     for (unsigned int layer = 0; layer < nlayer; layer++) {
         // 1. Attention
         // rms norm
+        RUN_INFINI(infiniopRMSNorm(
+            desc_norm, workspace, workspace_size,
+            logits_in->data(stream_compute), logits_out->data(),
+            rsrc.w_attn_norm[layer]->data(stream_compute), stream_compute_raw));
 
         // qkv_proj
+        RUN_INFINI(infiniopMatmul(
+            desc_attn_qkv, workspace, workspace_size,
+            qkv_buf->data(stream_compute), logits_in->data(),
+            rsrc.w_attn_qkv[layer]->data(stream_compute), stream_compute_raw));
+        // rope
+        RUN_INFINI(infiniopRoPE(
+            desc_rope_q, workspace, workspace_size,
+            qkv_buf->data(stream_compute), pos_ids_buf->data(stream_compute),
+            rsrc.sin_table->data(stream_compute),
+            rsrc.cos_table->data(stream_compute), stream_compute_raw));
+        RUN_INFINI(infiniopRoPE(desc_rope_k, workspace, workspace_size,
+                                qkv_buf->data(nh * dh, stream_compute),
+                                pos_ids_buf->data(stream_compute),
+                                rsrc.sin_table->data(stream_compute),
+                                rsrc.cos_table->data(stream_compute),
+                                stream_compute_raw));
 
+        size_t token_offset = 0;
         for (unsigned int req = 0; req < nreq; req++) {
+            auto past_len = req_pos[req];
+            auto seq_len = req_lens[req];
             // self attention
+            RUN_INFINI(infiniopAttention(
+                desc_attns[req], workspace, workspace_size,
+                o_buf->data(token_offset * nh * dh, stream_compute),
+                qkv_buf->data(token_offset * (nh + nkvh * 2) * dh,
+                              stream_compute),
+                qkv_buf->data(token_offset * (nh + nkvh * 2) * dh + nh * dh,
+                              stream_compute),
+                qkv_buf->data(token_offset * (nh + nkvh * 2) * dh +
+                                  (nh + nkvh) * dh,
+                              stream_compute),
+                kv_caches[req]->k[idev][layer]->data(stream_compute),
+                kv_caches[req]->v[idev][layer]->data(stream_compute),
+                stream_compute_raw));
+
+            token_offset += seq_len;
         }
 
-        // o_proj and all_reduce
+        // o_proj
+        RUN_INFINI(infiniopMatmul(
+            desc_attn_o, workspace, workspace_size,
+            logits_in->data(stream_compute), o_buf->data(),
+            rsrc.w_attn_out[layer]->data(stream_compute), stream_compute_raw));
+        // TODO: all_reduce
 
         // 2. FFN
         // rms_norm
-
+        RUN_INFINI(infiniopRMSNorm(
+            desc_norm, workspace, workspace_size,
+            logits_in->data(stream_compute), logits_out->data(stream_compute),
+            rsrc.w_attn_norm[layer]->data(stream_compute), stream_compute_raw));
         // mlp
+        RUN_INFINI(infiniopMLP(
+            desc_mlp, workspace, workspace_size,
+            logits_in->data(stream_compute), logits_out->data(stream_compute),
+            rsrc.w_ffn_gate_up[layer]->data(stream_compute),
+            rsrc.w_ffn_down[layer]->data(stream_compute), stream_compute_raw));
 
-        // all_reduce
+        // TODO: all_reduce
     }
-
+    // Sample and Output
     if (idev == 0) {
-        // Sample and Output
+        std::random_device _rd;
+        std::mt19937 gen(_rd());
+        size_t token_offset = 0;
+        for (unsigned int req = 0; req < nreq; req++) {
+            auto past_len = req_pos[req];
+            auto seq_len = req_lens[req];
+            float random_val = std::uniform_real_distribution<float>(0, 1)(gen);
+            auto prob = logits_in->slice(0, token_offset + seq_len - 1, 1);
+            RUN_INFINI(infiniopRandomSample(
+                desc_sample, workspace, workspace_size,
+                result_buf->data(req, stream_compute),
+                prob->data(stream_compute), random_val, topp, topk, temperature,
+                stream_compute_raw));
+            token_offset += seq_len;
+        }
+        infinirtMemcpyD2H(result_cpu.data(), result_buf->data(stream_data),
+                          device, device_id, sizeof(uint64_t) * nreq);
+        for (unsigned int req = 0; req < nreq; req++) {
+            ans[req] = (unsigned int)result_cpu[req];
+        }
     }
+
+    // Clean up
+    infiniopDestroyRMSNormDescriptor(desc_norm);
+    infiniopDestroyMatmulDescriptor(desc_attn_qkv);
+    infiniopDestroyMatmulDescriptor(desc_attn_o);
+    infiniopDestroyRoPEDescriptor(desc_rope_q);
+    infiniopDestroyRoPEDescriptor(desc_rope_k);
+    infiniopDestroyMLPDescriptor(desc_mlp);
+    for (unsigned int req = 0; req < nreq; req++) {
+        infiniopDestroyAttentionDescriptor(desc_attns[req]);
+    }
+    infiniopDestroyRandomSampleDescriptor(desc_sample);
+    infinirtFree(workspace, device, device_id);
 }
 
 __C void infer(struct Model const *model, unsigned int ntok,
                unsigned int const *tokens, unsigned int nreq,
                unsigned int const *req_lens, unsigned int const *req_pos,
-               struct KVCache *kv_caches, unsigned int *ans, float temperature,
+               struct KVCache **kv_caches, unsigned int *ans, float temperature,
                unsigned int topk, float topp) {
     auto ndev = model->dev.size();
     auto threads = std::vector<std::thread>(ndev);
     for (unsigned int idev = 0; idev < ndev; idev++) {
-        threads[idev] = std::thread(
-            infer_device, model->meta, model->dev[idev], idev, ndev, ntok,
-            tokens, nreq, req_lens, req_pos, kv_caches->k[idev],
-            kv_caches->v[idev], ans, temperature, topk, topp);
+        threads[idev] =
+            std::thread(infer_device, model->meta, model->dev[idev], idev, ndev,
+                        ntok, tokens, nreq, req_lens, req_pos, kv_caches, ans,
+                        temperature, topk, topp);
     }
     for (unsigned int idev = 0; idev < ndev; idev++) {
         threads[idev].join();

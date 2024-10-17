@@ -2,6 +2,19 @@
 #include "../utils.h"
 #include <numeric>
 
+
+std::shared_ptr<TensorDesc> TensorDesc::create(DataType dtype, const std::vector<index_t> &shape, const std::vector<stride_t> &strides) {
+    std::shared_ptr<TensorDesc> desc = std::make_shared<TensorDesc>();
+    infiniopCreateTensorDescriptor(&desc->_desc, shape.size(), shape.data(),
+                                   strides.data(), dt_layout(dtype));
+    return desc;
+}
+
+TensorDesc::~TensorDesc() {
+    infiniopDestroyTensorDescriptor(this->_desc);
+}
+
+
 const std::vector<index_t> &Tensor::shape() const { return this->_shape; }
 const std::vector<stride_t> &Tensor::strides() const { return this->_strides; }
 size_t Tensor::ndim() const { return this->_shape.size(); }
@@ -9,9 +22,9 @@ DataType Tensor::dtype() const { return this->_dtype; }
 size_t Tensor::byte_size() const { return this->_size; }
 DeviceType Tensor::device_type() const { return this->storage->device; }
 uint32_t Tensor::device_id() const { return this->storage->deviceId; }
-infiniopTensorDescriptor_t Tensor::desc() const{ return this->_desc; }
 Tensor::~Tensor() {}
 
+std::shared_ptr<TensorDesc> Tensor::desc() const{ return TensorDesc::create(this->_dtype, this->_shape, this->_strides); }
 
 std::shared_ptr<Tensor> Tensor::buffer(DataType dtype,
                                        const std::vector<index_t> &shape,
@@ -86,7 +99,7 @@ std::shared_ptr<Tensor> Tensor::weight(void *data, DataType dtype,
 void *Tensor::data_impl(index_t offset, infinirtStream_t stream) const {
     ASSERT(offset * dt_size(this->dtype()) < this->_size);
 
-    if (infinirtEventQuery(this->storage->event) == INFINIRT_STATUS_NOT_READY) {
+    if (this->storage->event != nullptr && infinirtEventQuery(this->storage->event) == INFINIRT_STATUS_NOT_READY) {
         if (stream == nullptr) {
             infinirtEventSynchronize(this->storage->event);
         } else {
@@ -121,8 +134,8 @@ void Tensor::copy_from(std::shared_ptr<Tensor const> src,
     void* raw_stream;
     if (stream != nullptr)
         infinirtGetRawStream(&raw_stream, stream);
-    infiniopCreateRearrangeDescriptor(handle, &desc, src->desc(),
-                                      this->desc());
+    infiniopCreateRearrangeDescriptor(handle, &desc, src->desc()->get(),
+                                      this->desc()->get());
     infiniopRearrange(desc, this->data(stream), src->data(stream), raw_stream);
     infiniopDestroyRearrangeDescriptor(desc);
     infinirtEventRecord(this->storage->event, stream);

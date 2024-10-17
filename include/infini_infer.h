@@ -97,7 +97,7 @@ __C __export void
 infer(struct Model const *,
       unsigned int ntok, unsigned int const *tokens,
       unsigned int nreq, unsigned int const *req_lens, unsigned int const *req_pos,
-      struct KVCache *kv_caches, unsigned int *ans,
+      struct KVCache **kv_caches, unsigned int *ans,
       float temperature, unsigned int topk, float topp);
 
 /// @brief 销毁模型

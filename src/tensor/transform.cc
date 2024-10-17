@@ -4,33 +4,50 @@
 #include <numeric>
 #include <vector>
 
-std::shared_ptr<Tensor> Tensor::slice_impl(size_t dim, size_t start, size_t len) const {
+
+std::shared_ptr<Tensor> Tensor::slice_impl(const std::vector<SliceParams>& slices) const {
     std::shared_ptr<Tensor> tensor = std::make_shared<Tensor>();
-    ASSERT(this->_shape[dim] >= start + len);
+    
     auto new_shape = std::vector<index_t>(this->_shape);
-    new_shape[dim] = len;
+    size_t offset = 0;
+
+    for (const auto& slice : slices) {
+        ASSERT(this->_shape[slice.dim] >= slice.start + slice.len);
+        new_shape[slice.dim] = slice.len;
+        offset += slice.start * this->_strides[slice.dim];
+    }
 
     tensor->_dtype = this->_dtype;
     tensor->_shape = new_shape;
     tensor->_strides = std::vector<stride_t>(this->_strides);
-    tensor->_data = static_cast<char *>(this->_data) +
-                        start * this->_strides[dim] * dt_size(this->_dtype);
-    tensor->_size =
-        std::accumulate(new_shape.begin(), new_shape.end(),
-                        dt_size(this->_dtype), std::multiplies<index_t>());
+    
+    tensor->_data = static_cast<char *>(this->_data) + offset * dt_size(this->_dtype);
+    
+    tensor->_size = std::accumulate(new_shape.begin(), new_shape.end(),
+                                     dt_size(this->_dtype), std::multiplies<index_t>());
     tensor->storage = this->storage;
     infiniopCreateTensorDescriptor(&tensor->_desc, tensor->_shape.size(), tensor->_shape.data(),
                                    tensor->_strides.data(), dt_layout(tensor->_dtype));
     return tensor;
 }
 
+
 std::shared_ptr<Tensor> Tensor::slice(size_t dim, size_t start, size_t len) {
-    return this->slice_impl(dim, start, len);
+    return this->slice_impl({{dim, start, len}});
 }
 
 std::shared_ptr<Tensor const> Tensor::slice(size_t dim, size_t start, size_t len) const
 {
-    return this->slice_impl(dim, start, len);
+    return this->slice_impl({{dim, start, len}});
+}
+
+std::shared_ptr<Tensor> Tensor::slice(const std::vector<SliceParams>& slices) {
+    return this->slice_impl(slices);
+}
+
+std::shared_ptr<Tensor const> Tensor::slice(const std::vector<SliceParams>& slices) const
+{
+    return this->slice_impl(slices);
 }
 
 std::shared_ptr<Tensor> Tensor::dim_merge(size_t dim_start, size_t dim_end)

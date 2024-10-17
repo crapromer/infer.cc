@@ -21,4 +21,13 @@ inline void assert_true(int expr, const char *msg, const char *file, int line)
     printf("Error at %s:%d - %s\n", __FILE__, __LINE__, #EXPR); \
     exit(EXIT_FAILURE)
 
+#define RUN_INFINI(EXPR)                                                       \
+    do {                                                                       \
+        uint64_t code = (uint64_t)(#EXPR);                                               \
+        if (code != 0) {                                                       \
+            printf("Error at %s:%d with code %lu\n", __FILE__, __LINE__, code); \
+            exit(EXIT_FAILURE);                                                \
+        }                                                                      \
+    } while (0)
+
 #endif
