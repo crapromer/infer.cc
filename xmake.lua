@@ -83,7 +83,7 @@ target("infini_infer_test")
     add_files("src/models/*.cc")
     add_files("src/tensor/*.cc")
    
-    add_links("/data1/shared/panzezhong/operators/lib/liboperators.so")
+    add_links(os.getenv("INFINI_ROOT") .. "/liboperators.so")
     add_cxflags("-fopenmp")
     add_ldflags("-fopenmp")
     
