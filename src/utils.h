@@ -23,9 +23,9 @@ inline void assert_true(int expr, const char *msg, const char *file, int line)
 
 #define RUN_INFINI(EXPR)                                                       \
     do {                                                                       \
-        uint64_t code = (uint64_t)(#EXPR);                                               \
+        int code = static_cast<int>(EXPR);                                     \
         if (code != 0) {                                                       \
-            printf("Error at %s:%d with code %lu\n", __FILE__, __LINE__, code); \
+            printf("Error at %s:%d with code %d\n", __FILE__, __LINE__, code); \
             exit(EXIT_FAILURE);                                                \
         }                                                                      \
     } while (0)

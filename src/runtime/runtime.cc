@@ -1,5 +1,21 @@
 #include "runtime.h"
 #include "cuda/infinirt_cuda.h"
+#include <cstdlib>
+#include <string.h>
+
+// Device
+__C infinirtStatus_t infinirtDeviceSynchronize(DeviceType device, uint32_t deviceId){
+    switch (device)
+    {
+    case DEVICE_CPU:
+        return INFINIRT_STATUS_SUCCESS;
+    case DEVICE_NVIDIA:
+        return synchronizeCudaDevice(deviceId);
+
+    default:
+        return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
+    }
+}
 
 // Stream
 __C infinirtStatus_t infinirtStreamCreate(infinirtStream_t *pStream, DeviceType device, uint32_t deviceId)
@@ -117,6 +133,9 @@ __C infinirtStatus_t infinirtMalloc(void **pMemory, DeviceType device,
                                     uint32_t deviceId, size_t size) {
     switch (device)
     {
+    case DEVICE_CPU:
+        *pMemory = std::malloc(size);
+        return INFINIRT_STATUS_SUCCESS;
     case DEVICE_NVIDIA:
         return mallocCuda(pMemory, deviceId, size);
 
@@ -146,6 +165,9 @@ __C infinirtStatus_t infinirtFree(void *ptr, DeviceType device,
     if (ptr == nullptr)
         return INFINIRT_STATUS_SUCCESS;
     switch (device) {
+    case DEVICE_CPU:
+        std::free(ptr);
+        return INFINIRT_STATUS_SUCCESS;
     case DEVICE_NVIDIA:
         return freeCuda(ptr, deviceId);
 
@@ -163,8 +185,28 @@ __C infinirtStatus_t infinirtFreeAsync(void *ptr, DeviceType device,
         (device != stream->device || deviceId != stream->device_id))
         return INFINIRT_STATUS_DEVICE_MISMATCH;
     switch (device) {
+    case DEVICE_CPU:
+        return infinirtFree(ptr, device, deviceId);
     case DEVICE_NVIDIA:
         return freeCudaAsync(ptr, deviceId, stream);
+
+    default:
+        return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
+    }
+}
+
+__C infinirtStatus_t infinirtMemcpyH2D(void *dst, DeviceType device,
+                                            uint32_t deviceId, const void *src,
+                                            size_t size) {
+    if (dst == nullptr || src == nullptr)
+        return INFINIRT_STATUS_INVALID_ARGUMENT;
+
+    switch (device) {
+    case DEVICE_CPU:
+        memcpy(dst, src, size);
+        return INFINIRT_STATUS_SUCCESS;
+    case DEVICE_NVIDIA:
+        return memcpyHost2Cuda(dst, deviceId, src, size);
 
     default:
         return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
@@ -182,6 +224,8 @@ __C infinirtStatus_t infinirtMemcpyH2DAsync(void *dst, DeviceType device,
         return INFINIRT_STATUS_DEVICE_MISMATCH;
 
     switch (device) {
+    case DEVICE_CPU:
+        return infinirtMemcpyH2D(dst, device, deviceId, src, size);
     case DEVICE_NVIDIA:
         return memcpyHost2CudaAsync(dst, deviceId, src, size, stream);
 

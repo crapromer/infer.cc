@@ -36,6 +36,8 @@ typedef enum
     INFINIRT_STATUS_NOT_READY = 7,
 } infinirtStatus_t;
 
+// Device
+__C __export infinirtStatus_t infinirtDeviceSynchronize(DeviceType device, uint32_t deviceId);
 
 // Stream
 struct infinirtStream;
@@ -60,6 +62,7 @@ __C __export infinirtStatus_t infinirtMalloc(void **pMemory, DeviceType device, 
 __C __export infinirtStatus_t infinirtMallocAsync(void **pMemory, DeviceType device, uint32_t deviceId, size_t size, infinirtStream_t stream);
 __C __export infinirtStatus_t infinirtFree(void *ptr, DeviceType device, uint32_t deviceId);
 __C __export infinirtStatus_t infinirtFreeAsync(void *ptr, DeviceType device, uint32_t deviceId, infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtMemcpyH2D(void *dst, DeviceType device, uint32_t deviceId, const void *src, size_t size);
 __C __export infinirtStatus_t infinirtMemcpyH2DAsync(void *dst, DeviceType device, uint32_t deviceId, const void *src, size_t size, infinirtStream_t stream);
 __C __export infinirtStatus_t infinirtMemcpyD2H(void *dst, const void* src, DeviceType device, uint32_t deviceId, size_t size);
 __C __export infinirtStatus_t infinirtMemcpyAsync(void *dst, const void* src, DeviceType device, uint32_t deviceId, size_t size, infinirtStream_t stream);

@@ -102,15 +102,17 @@ __C struct KVCache *create_kv_cache(struct Model const *model) {
     auto dh = model->meta.dh;
     auto shape = std::vector<index_t>{nkvh, max_len, dh};
     for (unsigned int idev = 0; idev < ndev; idev++) {
-        auto kcache = std::vector<std::shared_ptr<Tensor>>(model->meta.nlayer);
-        auto vcache = std::vector<std::shared_ptr<Tensor>>(model->meta.nlayer);
+        auto kcache = std::vector<std::shared_ptr<Tensor>>();
+        auto vcache = std::vector<std::shared_ptr<Tensor>>();
         for (unsigned int layer = 0; layer < model->meta.nlayer; layer++) {
-            kcache.emplace_back(Tensor::buffer(
-                model->meta.dt_mat, shape, model->dev[idev].device,
-                model->dev[idev].device_id, model->dev[idev].stream_cache));
-            vcache.emplace_back(Tensor::buffer(
-                model->meta.dt_mat, shape, model->dev[idev].device,
-                model->dev[idev].device_id, model->dev[idev].stream_cache));
+            kcache.push_back(std::move(Tensor::buffer(model->meta.dt_mat, shape,
+                                                model->dev[idev].device,
+                                                model->dev[idev].device_id,
+                                                model->dev[idev].stream_cache)));
+            vcache.push_back(std::move(Tensor::buffer(model->meta.dt_mat, shape,
+                                                model->dev[idev].device,
+                                                model->dev[idev].device_id,
+                                                model->dev[idev].stream_cache)));
         }
         cache->k.push_back(kcache);
         cache->v.push_back(vcache);
@@ -173,7 +175,7 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
         Tensor::buffer(dt_logits, {ntok, d}, device, device_id, stream_data);
     auto logits_out =
         Tensor::buffer(dt_logits, {ntok, d}, device, device_id, stream_data);
-    auto qkv_buf = Tensor::buffer(dt_logits, {ntok, (nkvh * 2 + nh) * dh},
+    auto qkv_buf = Tensor::buffer(dt_logits, {ntok, (nh + nkvh * 2) * dh},
                                   device, device_id, stream_data);
     auto o_buf = Tensor::buffer(dt_logits, {ntok, nh * dh}, device, device_id,
                                 stream_data);
@@ -189,21 +191,23 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
         }
         req_start += req_lens[req];
     }
+
+    std::shared_ptr<Tensor> pos_ids_buf;
     if (rsrc.device == DEVICE_CPU) {
-        auto pos_ids_buf = Tensor::weight((void *)req_pos, DATA_TYPE_U64,
-                                          {ntok}, rsrc.device, rsrc.device_id);
+        pos_ids_buf = Tensor::weight(batch_pos_ids.data(), DATA_TYPE_U64, {ntok},
+                                     rsrc.device, rsrc.device_id);
     } else {
-        auto pos_ids_buf = Tensor::buffer(DATA_TYPE_U64, {ntok}, rsrc.device,
-                                          rsrc.device_id, rsrc.stream_compute);
-        infinirtMemcpyH2DAsync(pos_ids_buf->data(rsrc.stream_compute), device,
-                               device_id, req_pos, sizeof(uint64_t) * ntok,
-                               rsrc.stream_compute);
+        pos_ids_buf = Tensor::buffer(DATA_TYPE_U64, {ntok}, rsrc.device,
+                                     rsrc.device_id, rsrc.stream_compute);
+        RUN_INFINI(infinirtMemcpyH2DAsync(pos_ids_buf->data(rsrc.stream_compute), device,
+                               device_id, batch_pos_ids.data(), sizeof(uint64_t) * ntok,
+                               rsrc.stream_compute));
     }
     for (unsigned int i = 0; i < ntok; i++) {
-        infinirtMemcpyH2DAsync(
-            logits_in->data(i * d, stream_compute), device, device_id,
-            rsrc.w_in_embd->data(tokens[i] * d, stream_compute),
-            dt_size(dt_logits) * d, stream_compute);
+        RUN_INFINI(infinirtMemcpyAsync(logits_in->data(i * d, stream_compute),
+                            rsrc.w_in_embd->data(tokens[i] * d, stream_compute),
+                            device, device_id,
+                            dt_size(dt_logits) * d, stream_compute));
     }
 
     // Prepare operators and workspace
@@ -254,10 +258,13 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
     for (unsigned int req = 0; req < nreq; req++) {
         auto past_len = req_pos[req];
         auto seq_len = req_lens[req];
-        auto q = qkv_buf->slice({{0, token_offset, seq_len}, {1, 0, nh}});
-        auto k = qkv_buf->slice({{0, token_offset, seq_len}, {1, nh, nkvh}});
+        auto q = qkv_buf->slice({{0, token_offset, seq_len}, {1, 0, nh}})
+                     ->permute({1, 0, 2});
+        auto k = qkv_buf->slice({{0, token_offset, seq_len}, {1, nh, nkvh}})
+                     ->permute({1, 0, 2});
         auto v =
-            qkv_buf->slice({{0, token_offset, seq_len}, {1, nh + nkvh, nkvh}});
+            qkv_buf->slice({{0, token_offset, seq_len}, {1, nh + nkvh, nkvh}})
+                ->permute({1, 0, 2});
         auto k_cache = kv_caches[req]->k[idev][0];
         auto v_cache = kv_caches[req]->v[idev][0];
         RUN_INFINI(infiniopCreateAttentionDescriptor(
@@ -272,8 +279,8 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
     infiniopRandomSampleDescriptor_t desc_sample;
     RUN_INFINI(infiniopCreateRandomSampleDescriptor(
         rsrc.handle, &desc_sample,
-        TensorDesc::create(DATA_TYPE_U64, {1}, {1}).get(),
-        TensorDesc::create(dt_logits, {d}, {1}).get()));
+        TensorDesc::create(DATA_TYPE_U64, {1}, {1})->get(),
+        TensorDesc::create(dt_logits, {d}, {1})->get()));
     // Allocate workspace
     RUN_INFINI(infinirtMallocAsync(&workspace, device, device_id,
                                    workspace_size, stream_compute));
@@ -291,18 +298,21 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
             desc_attn_qkv, workspace, workspace_size,
             qkv_buf->data(stream_compute), logits_in->data(),
             rsrc.w_attn_qkv[layer]->data(stream_compute), stream_compute_raw));
+        RUN_INFINI(infinirtDeviceSynchronize(device, device_id));
         // rope
         RUN_INFINI(infiniopRoPE(
             desc_rope_q, workspace, workspace_size,
             qkv_buf->data(stream_compute), pos_ids_buf->data(stream_compute),
             rsrc.sin_table->data(stream_compute),
             rsrc.cos_table->data(stream_compute), stream_compute_raw));
+        RUN_INFINI(infinirtDeviceSynchronize(device, device_id));
         RUN_INFINI(infiniopRoPE(desc_rope_k, workspace, workspace_size,
                                 qkv_buf->data(nh * dh, stream_compute),
                                 pos_ids_buf->data(stream_compute),
                                 rsrc.sin_table->data(stream_compute),
                                 rsrc.cos_table->data(stream_compute),
                                 stream_compute_raw));
+        RUN_INFINI(infinirtDeviceSynchronize(device, device_id));
 
         size_t token_offset = 0;
         for (unsigned int req = 0; req < nreq; req++) {
@@ -325,7 +335,7 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
 
             token_offset += seq_len;
         }
-
+        RUN_INFINI(infinirtDeviceSynchronize(device, device_id));
         // o_proj
         RUN_INFINI(infiniopMatmul(
             desc_attn_o, workspace, workspace_size,
@@ -349,6 +359,7 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
         // TODO: all_reduce
     }
     // Sample and Output
+    uint64_t tmp;
     if (idev == 0) {
         std::random_device _rd;
         std::mt19937 gen(_rd());
@@ -365,10 +376,13 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
                 stream_compute_raw));
             token_offset += seq_len;
         }
-        infinirtMemcpyD2H(result_cpu.data(), result_buf->data(stream_data),
-                          device, device_id, sizeof(uint64_t) * nreq);
+        RUN_INFINI(infinirtDeviceSynchronize(device, device_id));
+        RUN_INFINI(infinirtMemcpyD2H(&tmp, result_buf->data(stream_data),
+                          device, device_id, sizeof(uint64_t) * nreq));
         for (unsigned int req = 0; req < nreq; req++) {
-            ans[req] = (unsigned int)result_cpu[req];
+            // ans[req] = (unsigned int)result_cpu[req];
+            ans[req] = (unsigned int)tmp;
+
         }
     }
 

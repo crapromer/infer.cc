@@ -17,7 +17,6 @@ struct Storage
     uint32_t deviceId;
     infinirtEvent_t event;
 
-    static std::shared_ptr<Storage> host(void *data, size_t size);
     static std::shared_ptr<Storage> create(size_t size, DeviceType device, uint32_t device_id);
     static std::shared_ptr<Storage> createAsync(size_t size, DeviceType device, uint32_t device_id, infinirtStream_t stream = nullptr);
     ~Storage();

@@ -119,7 +119,7 @@ inline std::shared_ptr<Tensor> get_ffn_down(
 inline std::shared_ptr<Tensor> get_sin_table(LlamaMeta const *meta,
                                              DeviceType device,
                                              unsigned int device_id) {
-    auto table = std::vector<float>(meta->dctx * meta->dh);
+    float *table = (float *)std::malloc(meta->dctx * meta->dh * sizeof(float));
     auto half_dh = meta->dh / 2;
     for (size_t i = 0; i < meta->dctx; i++) {
         for (size_t j = 0; j < half_dh; j++) {
@@ -130,15 +130,17 @@ inline std::shared_ptr<Tensor> get_sin_table(LlamaMeta const *meta,
             table[i * meta->dh + 2 * j + 1] = _sin;
         }
     }
-    auto shape = std::vector<index_t>({meta->dvoc, meta->d});
-    return Tensor::weight(table.data(), DATA_TYPE_F32, shape, device,
-                          device_id);
+    auto shape = std::vector<index_t>({meta->dctx, meta->dh});
+    auto tensor =
+        Tensor::weight(table, DATA_TYPE_F32, shape, device, device_id);
+    std::free(table);
+    return tensor;
 }
 
 inline std::shared_ptr<Tensor> get_cos_table(LlamaMeta const *meta,
                                              DeviceType device,
                                              unsigned int device_id) {
-    auto table = std::vector<float>(meta->dctx * meta->dh);
+    float *table = (float *)std::malloc(meta->dctx * meta->dh * sizeof(float));
     auto half_dh = meta->dh / 2;
     for (size_t i = 0; i < meta->dctx; i++) {
         for (size_t j = 0; j < half_dh; j++) {
@@ -149,7 +151,9 @@ inline std::shared_ptr<Tensor> get_cos_table(LlamaMeta const *meta,
             table[i * meta->dh + 2 * j + 1] = _cos;
         }
     }
-    auto shape = std::vector<index_t>({meta->dvoc, meta->d});
-    return Tensor::weight(table.data(), DATA_TYPE_F32, shape, device,
-                          device_id);
+    auto shape = std::vector<index_t>({meta->dctx, meta->dh});
+    auto tensor =
+        Tensor::weight(table, DATA_TYPE_F32, shape, device, device_id);
+    std::free(table);
+    return tensor;
 }

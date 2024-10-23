@@ -1,19 +1,10 @@
 #include "../tensor.h"
 
-std::shared_ptr<Storage> Storage::host(void *data, size_t size){
-    auto storage = std::make_shared<Storage>();
-    storage->memory = data;
-    storage->size = size;
-    storage->device = DEVICE_CPU;
-    storage->deviceId = 0;
-    storage->event = nullptr;
-    return storage;
-}
 
 std::shared_ptr<Storage> Storage::create(size_t size, DeviceType device, uint32_t device_id)
 {
     auto storage = std::make_shared<Storage>();
-    infinirtMalloc(&storage->memory, device, device_id, size);
+    RUN_INFINI(infinirtMalloc(&storage->memory, device, device_id, size));
     storage->size = size;
     storage->device = device;
     storage->deviceId = device_id;
@@ -24,9 +15,9 @@ std::shared_ptr<Storage> Storage::create(size_t size, DeviceType device, uint32_
 std::shared_ptr<Storage> Storage::createAsync(size_t size, DeviceType device, uint32_t device_id, infinirtStream_t stream)
 {
     auto storage = std::make_shared<Storage>();
-    infinirtMallocAsync(&storage->memory, device, device_id, size, stream);
-    infinirtEventCreate(&storage->event, device, device_id);
-    infinirtEventRecord(storage->event, stream);
+    RUN_INFINI(infinirtMallocAsync(&storage->memory, device, device_id, size, stream));
+    RUN_INFINI(infinirtEventCreate(&storage->event, device, device_id));
+    RUN_INFINI(infinirtEventRecord(storage->event, stream));
     storage->size = size;
     storage->device = device;
     storage->deviceId = device_id;
@@ -39,11 +30,12 @@ Storage::~Storage()
     {
         if (infinirtEventQuery(this->event) == INFINIRT_STATUS_NOT_READY)
         {
-            infinirtEventSynchronize(this->event);
+            RUN_INFINI(infinirtEventSynchronize(this->event));
         }
-        infinirtEventDestroy(this->event);
+        RUN_INFINI(infinirtEventDestroy(this->event));
     }
+    this->event = nullptr;
     if (this->memory)
-        infinirtFree(this->memory, this->device, this->deviceId);
+        RUN_INFINI(infinirtFree(this->memory, this->device, this->deviceId));
 }
 

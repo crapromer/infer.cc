@@ -83,11 +83,12 @@ std::shared_ptr<Tensor> Tensor::weight(void *data, DataType dtype,
     }
     tensor->_strides = strides;
     if (device == DEVICE_CPU) {
-        tensor->storage = Storage::host(data, size);
+        tensor->storage = Storage::create(size, device, deviceId);
+        RUN_INFINI(infinirtMemcpyH2D(tensor->storage->memory, device, deviceId, data, size));
     } else {
         tensor->storage = Storage::create(size, device, deviceId);
-        infinirtMemcpyH2DAsync(tensor->storage->memory, device, deviceId, data,
-                               size, nullptr);
+        RUN_INFINI(infinirtMemcpyH2D(tensor->storage->memory, device, deviceId, data,
+                               size));
     }
     tensor->_data = tensor->storage->memory;
     tensor->_size = size;

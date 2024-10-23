@@ -24,6 +24,12 @@ inline cudaStream_t getCudaStream(infinirtStream_t stream) {
     return static_cast<cudaStream_t>(stream->stream);
 }
 
+infinirtStatus_t synchronizeCudaDevice(uint32_t deviceId){
+    SWITCH_DEVICE(deviceId);
+    CUDA_CALL(cudaDeviceSynchronize());
+    return INFINIRT_STATUS_SUCCESS;
+}
+
 infinirtStatus_t createCudaStream(infinirtStream_t *pStream,
                                   uint32_t deviceId) {
     SWITCH_DEVICE(deviceId);
@@ -116,6 +122,14 @@ infinirtStatus_t freeCudaAsync(void *ptr, uint32_t deviceId,
     CUDA_CALL(cudaFreeAsync(ptr, getCudaStream(stream)));
     return INFINIRT_STATUS_SUCCESS;
 }
+
+infinirtStatus_t memcpyHost2Cuda(void *dst, uint32_t deviceId, const void *src,
+                                 size_t size) {
+    SWITCH_DEVICE(deviceId);
+    CUDA_CALL(cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice));
+    return INFINIRT_STATUS_SUCCESS;
+}
+
 infinirtStatus_t memcpyHost2CudaAsync(void *dst, uint32_t deviceId,
                                       const void *src, size_t size,
                                       infinirtStream_t stream) {
@@ -128,6 +142,8 @@ infinirtStatus_t memcpyHost2CudaAsync(void *dst, uint32_t deviceId,
 infinirtStatus_t memcpyCuda2Host(void *dst, const void *src, uint32_t deviceId,
                                  size_t size) {
     SWITCH_DEVICE(deviceId);
+    cudaPointerAttributes attributes;
+    CUDA_CALL(cudaPointerGetAttributes(&attributes, src));
     CUDA_CALL(cudaMemcpy(dst, src, size, cudaMemcpyDeviceToHost));
     return INFINIRT_STATUS_SUCCESS;
 }
