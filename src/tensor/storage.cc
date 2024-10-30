@@ -14,6 +14,9 @@ std::shared_ptr<Storage> Storage::create(size_t size, DeviceType device, uint32_
 
 std::shared_ptr<Storage> Storage::createAsync(size_t size, DeviceType device, uint32_t device_id, infinirtStream_t stream)
 {
+    if (device == DEVICE_CPU || stream == nullptr) {
+        return create(size, device, device_id);
+    }
     auto storage = std::make_shared<Storage>();
     RUN_INFINI(infinirtMallocAsync(&storage->memory, device, device_id, size, stream));
     RUN_INFINI(infinirtEventCreate(&storage->event, device, device_id));

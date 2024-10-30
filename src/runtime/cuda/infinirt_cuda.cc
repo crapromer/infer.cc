@@ -142,8 +142,6 @@ infinirtStatus_t memcpyHost2CudaAsync(void *dst, uint32_t deviceId,
 infinirtStatus_t memcpyCuda2Host(void *dst, const void *src, uint32_t deviceId,
                                  size_t size) {
     SWITCH_DEVICE(deviceId);
-    cudaPointerAttributes attributes;
-    CUDA_CALL(cudaPointerGetAttributes(&attributes, src));
     CUDA_CALL(cudaMemcpy(dst, src, size, cudaMemcpyDeviceToHost));
     return INFINIRT_STATUS_SUCCESS;
 }

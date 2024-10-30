@@ -85,8 +85,12 @@ private:
     DataType dtype() const;
     std::shared_ptr<TensorDesc> desc() const;
     size_t byte_size() const;
+    size_t data_offset() const;
     DeviceType device_type() const;
     uint32_t device_id() const;
+    bool is_contigous() const;
+
+    void debug() const;
 
     ~Tensor();
 };

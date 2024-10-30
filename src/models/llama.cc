@@ -162,6 +162,7 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
     auto d = meta.d;
     auto dt_logits = meta.dt_logits;
     auto di = meta.di / ndev;
+    auto dvoc = meta.dvoc;
     auto device = rsrc.device;
     auto device_id = rsrc.device_id;
     auto stream_compute = rsrc.stream_compute;
@@ -179,6 +180,8 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
                                   device, device_id, stream_data);
     auto o_buf = Tensor::buffer(dt_logits, {ntok, nh * dh}, device, device_id,
                                 stream_data);
+    auto prob_buf =
+        Tensor::buffer(dt_logits, {nreq, dvoc}, device, device_id, stream_data);
     auto result_buf =
         Tensor::buffer(DATA_TYPE_U64, {nreq}, device, device_id, stream_data);
     auto result_cpu = std::vector<uint64_t>(nreq);
@@ -258,6 +261,7 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
     for (unsigned int req = 0; req < nreq; req++) {
         auto past_len = req_pos[req];
         auto seq_len = req_lens[req];
+        auto o = o_buf->slice({{0, token_offset, seq_len}});
         auto q = qkv_buf->slice({{0, token_offset, seq_len}, {1, 0, nh}})
                      ->permute({1, 0, 2});
         auto k = qkv_buf->slice({{0, token_offset, seq_len}, {1, nh, nkvh}})
@@ -268,19 +272,31 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
         auto k_cache = kv_caches[req]->k[idev][0];
         auto v_cache = kv_caches[req]->v[idev][0];
         RUN_INFINI(infiniopCreateAttentionDescriptor(
-            rsrc.handle, &desc_attns[req], o_buf->desc()->get(),
-            q->desc()->get(), k->desc()->get(), v->desc()->get(),
-            k_cache->desc()->get(), v_cache->desc()->get(), past_len));
+            rsrc.handle, &desc_attns[req], o->desc()->get(), q->desc()->get(),
+            k->desc()->get(), v->desc()->get(), k_cache->desc()->get(),
+            v_cache->desc()->get(), past_len));
         RUN_INFINI(
             infiniopGetAttentionWorkspaceSize(desc_attns[req], &temp_size));
         workspace_size = std::max(workspace_size, temp_size);
         token_offset += seq_len;
     }
+    infiniopRMSNormDescriptor_t desc_norm_out;
+    RUN_INFINI(infiniopCreateRMSNormDescriptor(
+        rsrc.handle, &desc_norm_out, logits_out->slice(0, 0, 1)->desc()->get(),
+        logits_out->slice(0, 0, 1)->desc()->get(),
+        rsrc.w_out_norm->desc()->get(), meta.epsilon));
+    infiniopMatmulDescriptor_t desc_out_embd;
+    RUN_INFINI(infiniopCreateMatmulDescriptor(
+        rsrc.handle, &desc_out_embd, prob_buf->desc()->get(), 1.0,
+        logits_out->slice(0, 0, nreq)->desc()->get(),
+        rsrc.w_out_embd->desc()->get(), 0.0));
+    RUN_INFINI(infiniopGetMatmulWorkspaceSize(desc_out_embd, &temp_size));
+    workspace_size = std::max(workspace_size, temp_size);
     infiniopRandomSampleDescriptor_t desc_sample;
     RUN_INFINI(infiniopCreateRandomSampleDescriptor(
         rsrc.handle, &desc_sample,
         TensorDesc::create(DATA_TYPE_U64, {1}, {1})->get(),
-        TensorDesc::create(dt_logits, {d}, {1})->get()));
+        TensorDesc::create(dt_logits, {dvoc}, {1})->get()));
     // Allocate workspace
     RUN_INFINI(infinirtMallocAsync(&workspace, device, device_id,
                                    workspace_size, stream_compute));
@@ -290,29 +306,25 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
         // rms norm
         RUN_INFINI(infiniopRMSNorm(
             desc_norm, workspace, workspace_size,
-            logits_in->data(stream_compute), logits_out->data(),
+            logits_out->data(stream_compute), logits_in->data(),
             rsrc.w_attn_norm[layer]->data(stream_compute), stream_compute_raw));
-
         // qkv_proj
         RUN_INFINI(infiniopMatmul(
             desc_attn_qkv, workspace, workspace_size,
-            qkv_buf->data(stream_compute), logits_in->data(),
+            qkv_buf->data(stream_compute), logits_out->data(),
             rsrc.w_attn_qkv[layer]->data(stream_compute), stream_compute_raw));
-        RUN_INFINI(infinirtDeviceSynchronize(device, device_id));
         // rope
         RUN_INFINI(infiniopRoPE(
             desc_rope_q, workspace, workspace_size,
             qkv_buf->data(stream_compute), pos_ids_buf->data(stream_compute),
             rsrc.sin_table->data(stream_compute),
             rsrc.cos_table->data(stream_compute), stream_compute_raw));
-        RUN_INFINI(infinirtDeviceSynchronize(device, device_id));
         RUN_INFINI(infiniopRoPE(desc_rope_k, workspace, workspace_size,
                                 qkv_buf->data(nh * dh, stream_compute),
                                 pos_ids_buf->data(stream_compute),
                                 rsrc.sin_table->data(stream_compute),
                                 rsrc.cos_table->data(stream_compute),
                                 stream_compute_raw));
-        RUN_INFINI(infinirtDeviceSynchronize(device, device_id));
 
         size_t token_offset = 0;
         for (unsigned int req = 0; req < nreq; req++) {
@@ -335,7 +347,6 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
 
             token_offset += seq_len;
         }
-        RUN_INFINI(infinirtDeviceSynchronize(device, device_id));
         // o_proj
         RUN_INFINI(infiniopMatmul(
             desc_attn_o, workspace, workspace_size,
@@ -347,8 +358,8 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
         // rms_norm
         RUN_INFINI(infiniopRMSNorm(
             desc_norm, workspace, workspace_size,
-            logits_in->data(stream_compute), logits_out->data(stream_compute),
-            rsrc.w_attn_norm[layer]->data(stream_compute), stream_compute_raw));
+            logits_out->data(stream_compute), logits_in->data(stream_compute),
+            rsrc.w_ffn_norm[layer]->data(stream_compute), stream_compute_raw));
         // mlp
         RUN_INFINI(infiniopMLP(
             desc_mlp, workspace, workspace_size,
@@ -361,19 +372,33 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
     // Sample and Output
     uint64_t tmp;
     if (idev == 0) {
-        std::random_device _rd;
-        std::mt19937 gen(_rd());
         size_t token_offset = 0;
         for (unsigned int req = 0; req < nreq; req++) {
             auto past_len = req_pos[req];
             auto seq_len = req_lens[req];
+            RUN_INFINI(infiniopRMSNorm(
+                desc_norm_out, workspace, workspace_size,
+                logits_out->data(req * d, stream_compute),
+                logits_in->data(token_offset * d, stream_compute),
+                rsrc.w_out_norm->data(stream_compute), stream_compute_raw));
+            token_offset += seq_len;
+        }
+        RUN_INFINI(infiniopMatmul(
+            desc_out_embd, workspace, workspace_size,
+            prob_buf->data(stream_compute), logits_out->data(stream_compute),
+            rsrc.w_out_embd->data(stream_compute), stream_compute_raw));
+        std::random_device _rd;
+        std::mt19937 gen(_rd());
+        token_offset = 0;
+        for (unsigned int req = 0; req < nreq; req++) {
+            auto past_len = req_pos[req];
+            auto seq_len = req_lens[req];
             float random_val = std::uniform_real_distribution<float>(0, 1)(gen);
-            auto prob = logits_in->slice(0, token_offset + seq_len - 1, 1);
             RUN_INFINI(infiniopRandomSample(
                 desc_sample, workspace, workspace_size,
                 result_buf->data(req, stream_compute),
-                prob->data(stream_compute), random_val, topp, topk, temperature,
-                stream_compute_raw));
+                prob_buf->data(req * dvoc, stream_compute), random_val, topp,
+                topk, temperature, stream_compute_raw));
             token_offset += seq_len;
         }
         RUN_INFINI(infinirtDeviceSynchronize(device, device_id));
@@ -396,6 +421,8 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
     for (unsigned int req = 0; req < nreq; req++) {
         infiniopDestroyAttentionDescriptor(desc_attns[req]);
     }
+    infiniopDestroyRMSNormDescriptor(desc_norm_out);
+    infiniopDestroyMatmulDescriptor(desc_out_embd);
     infiniopDestroyRandomSampleDescriptor(desc_sample);
     infinirtFree(workspace, device, device_id);
 }

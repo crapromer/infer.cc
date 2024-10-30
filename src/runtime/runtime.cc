@@ -152,6 +152,8 @@ __C infinirtStatus_t infinirtMallocAsync(void **pMemory, DeviceType device,
         return INFINIRT_STATUS_DEVICE_MISMATCH;
     switch (device)
     {
+    case DEVICE_CPU:
+        return infinirtMalloc(pMemory, device, deviceId, size);
     case DEVICE_NVIDIA:
         return mallocCudaAsync(pMemory, deviceId, size, stream);
 

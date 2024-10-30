@@ -12,6 +12,7 @@ std::shared_ptr<Tensor> Tensor::slice_impl(const std::vector<SliceParams>& slice
     size_t offset = 0;
 
     for (const auto& slice : slices) {
+        ASSERT(slice.len > 0);
         ASSERT(this->_shape[slice.dim] >= slice.start + slice.len);
         new_shape[slice.dim] = slice.len;
         offset += slice.start * this->_strides[slice.dim];
@@ -28,7 +29,7 @@ std::shared_ptr<Tensor> Tensor::slice_impl(const std::vector<SliceParams>& slice
     tensor->storage = this->storage;
     infiniopCreateTensorDescriptor(&tensor->_desc, tensor->_shape.size(), tensor->_shape.data(),
                                    tensor->_strides.data(), dt_layout(tensor->_dtype));
-    return tensor;
+    return std::move(tensor);
 }
 
 

@@ -1,9 +1,12 @@
 import ctypes
 from ctypes import c_void_p, c_uint, POINTER, c_float
+import sys
 
-lib = ctypes.CDLL(
-    "/data1/shared/panzezhong/infer.cc/build/linux/x86_64/debug/libinfini_infer.so"
-)
+if len(sys.argv) < 2:
+    print("Usage: python test_llama.py <path/to/libinfini_infer.so>")
+    sys.exit(1)
+lib_path = sys.argv[1]
+lib = ctypes.CDLL(lib_path)
 
 
 class DataType(ctypes.c_int):
@@ -64,11 +67,23 @@ class LlamaWeights(ctypes.Structure):
                 for i in range(self.nlayer)
             ]
         )
+        nh = llama.config.num_attention_heads
+        nkvh = llama.config.num_key_value_heads
+        dh = llama.config.hidden_size // llama.config.num_attention_heads
+        d = llama.config.hidden_size
         self.qkv_tensor = [
             torch.concat(
                 [
-                    state_dict[f"model.layers.{i}.self_attn.k_proj.weight"],
-                    state_dict[f"model.layers.{i}.self_attn.q_proj.weight"],
+                    state_dict[f"model.layers.{i}.self_attn.q_proj.weight"]
+                    .reshape([nh, 2, dh // 2, d])
+                    .transpose(1, 2)
+                    .reshape(nh * dh, d)
+                    .clone(),
+                    state_dict[f"model.layers.{i}.self_attn.k_proj.weight"]
+                    .reshape([nkvh, 2, dh // 2, d])
+                    .transpose(1, 2)
+                    .reshape(nkvh * dh, d)
+                    .clone(),
                     state_dict[f"model.layers.{i}.self_attn.v_proj.weight"],
                 ]
             )
@@ -153,17 +168,18 @@ def main():
 
     import torch
     import transformers
+    import time
 
     llama = transformers.LlamaForCausalLM.from_pretrained(
-        "/data2/shared/llama2/Llama-2-7b-hf/"
+        "/data0/shared/panzezhong/TinyLlama-1.1B-Chat-v1.0/", torch_dtype=torch.float16
     )
     tokenizer = transformers.AutoTokenizer.from_pretrained(
-        "/data2/shared/llama2/Llama-2-7b-hf/"
+        "/data0/shared/panzezhong/TinyLlama-1.1B-Chat-v1.0/"
     )
 
     temperature = 0.7
     topk = 1
-    topp = 0.0
+    topp = 0.8
 
     meta = LlamaMeta(
         dt_logits=DataType.DATA_TYPE_F16,
@@ -196,7 +212,7 @@ def main():
     )
 
     kv_cache = lib.create_kv_cache(model_instance)
-    tokens = tokenizer.encode("Once upon a time, ")
+    tokens = tokenizer.encode("Once upon a time,")
     ntok = len(tokens)
     nreq = 1
 
@@ -206,7 +222,9 @@ def main():
     kv_caches = (POINTER(KVCache) * nreq)(*[kv_cache])
     ans = (c_uint * nreq)()
 
-    for _ in range(10):
+    steps = 500
+    start_time = time.time()
+    for _step in range(steps):
         lib.infer(
             model_instance,
             ntok,
@@ -222,12 +240,20 @@ def main():
         )
 
         output_tokens = list(ans)
-        print(tokenizer.decode(output_tokens))
+        print(
+            tokenizer._tokenizer.id_to_token(output_tokens[0])
+            .replace("▁", " ")
+            .replace("<0x0A>", "\n"),
+            end="",
+        )
         req_pos[0] = req_pos[0] + ntok
         ntok = 1
         tokens = (c_uint * ntok)(*output_tokens)
         req_lens = (c_uint * nreq)(*[ntok])
 
+    print("\n")
+    end_time = time.time()
+    print(f"Time per step: {(end_time - start_time) *  1000 / steps:.3f}ms")
 
 if __name__ == "__main__":
     main()
