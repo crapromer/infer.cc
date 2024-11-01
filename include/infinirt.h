@@ -22,6 +22,7 @@ typedef enum
     DEVICE_CPU,
     DEVICE_NVIDIA,
     DEVICE_CAMBRICON,
+    DEVICE_ASCEND,
 } DeviceType;
 
 typedef enum

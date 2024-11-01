@@ -8,7 +8,7 @@ add_includedirs("include")
 option("nv-gpu")
     set_default(false)
     set_showmenu(true)
-    set_description("Enable or disable Nvidia GPU kernel")
+    set_description("Enable or disable Nvidia GPU functions")
     add_defines("ENABLE_NV_GPU")
 option_end()
 
@@ -16,8 +16,15 @@ option_end()
 option("cambricon-mlu")
     set_default(false)
     set_showmenu(true)
-    set_description("Enable or disable Cambricon MLU kernel")
+    set_description("Enable or disable Cambricon MLU functions")
     add_defines("ENABLE_CAMBRICON_MLU")
+option_end()
+
+option("ascend-npu")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable or disable Ascend NPU functions")
+    add_defines("ENABLE_ASCEND_NPU")
 option_end()
 
 
@@ -48,12 +55,42 @@ if has_config("nv-gpu") then
     target_end()
 end
 
+if has_config("ascend-npu") then
+
+    add_defines("ENABLE_ASCEND_NPU")
+    local ASCEND_HOME = os.getenv("ASCEND_HOME")
+    local SOC_VERSION = os.getenv("SOC_VERSION")
+
+    -- Add include dirs
+    add_includedirs(ASCEND_HOME .. "/include")
+    add_includedirs(ASCEND_HOME .. "/include/aclnn")
+    add_linkdirs(ASCEND_HOME .. "/lib64")
+    add_links("libascendcl.so")
+    add_links("libnnopbase.so")
+    add_links("libopapi.so")
+    add_links("libruntime.so")  
+    add_linkdirs(ASCEND_HOME .. "/../../driver/lib64/driver")
+    add_links("libascend_hal.so")
+
+    target("ascend-npu")
+        -- Other configs
+        set_kind("static")
+        set_languages("cxx17")
+        -- Add files
+        add_files("src/runtime/ascend/*.cc")
+        add_cxflags("-lstdc++ -Wall -Werror -fPIC")
+
+    target_end()
+end
 
 target("infinirt")
     set_kind("shared")
 
     if has_config("nv-gpu") then
         add_deps("nv-gpu")
+    end
+    if has_config("ascend-npu") then
+        add_deps("ascend-npu")
     end
 
     set_languages("cxx17")
@@ -77,6 +114,9 @@ target("infini_infer_test")
     add_includedirs("src")
     if has_config("nv-gpu") then
         add_deps("nv-gpu")   
+    end
+    if has_config("ascend-npu") then
+        add_deps("ascend-npu")
     end
     add_files("test/test.cc")
     add_files("test/tensor/*.cc")

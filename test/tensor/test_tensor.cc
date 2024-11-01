@@ -3,13 +3,23 @@
 #include "../test.h"
 #include <vector>
 
+#define CHECK_RUN(EXPR)                                                        \
+    do {                                                                       \
+        int code = static_cast<int>(EXPR);                                     \
+        if (code != 0) {                                                       \
+            printf("Error at %s:%d with code %d\n", __FILE__, __LINE__, code); \
+            return TEST_FAILED;                                                \
+        }                                                                      \
+    } while (0)
+
 int test_tensor_weight(DeviceType deviceType) {
     auto data =
         std::vector<float>{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
     auto result = std::vector<float>(10);
     auto tensor = Tensor::weight(data.data(), DATA_TYPE_F32,
                                  std::vector<index_t>({2, 5}), deviceType, 0);
-    infinirtMemcpyD2H(result.data(), tensor->data(), deviceType, 0, tensor->byte_size());
+    CHECK_RUN(infinirtMemcpyD2H(result.data(), tensor->data(), deviceType, 0,
+                                tensor->byte_size()));
     for (int i = 0; i < 10; i++) {
         TEST_EQUAL(result[i], data[i]);
     }
@@ -24,13 +34,15 @@ int test_tensor_buffer(DeviceType deviceType) {
     auto tensor1 = Tensor::weight(data.data(), DATA_TYPE_F32,
                                   std::vector<index_t>({2, 5}), deviceType, 0);
     infinirtStream_t stream_data, stream_compute;
-    infinirtStreamCreate(&stream_data, deviceType, 0);
-    infinirtStreamCreate(&stream_compute, deviceType, 0);
+    CHECK_RUN(infinirtStreamCreate(&stream_data, deviceType, 0));
+    CHECK_RUN(infinirtStreamCreate(&stream_compute, deviceType, 0));
     auto tensor2 = Tensor::buffer(DATA_TYPE_F32, std::vector<index_t>({2, 5}),
                                   deviceType, 0, stream_data);
-    infinirtMemcpyAsync(tensor2->data(stream_compute), tensor1->data(stream_compute), deviceType, 0, tensor1->byte_size(),
-                        stream_compute);
-    infinirtMemcpyD2H(result.data(), tensor2->data(), deviceType, 0, tensor2->byte_size());
+    CHECK_RUN(infinirtMemcpyAsync(tensor2->data(stream_compute),
+                                  tensor1->data(stream_compute), deviceType, 0,
+                                  tensor1->byte_size(), stream_compute));
+    CHECK_RUN(infinirtMemcpyD2H(result.data(), tensor2->data(), deviceType, 0,
+                                tensor2->byte_size()));
 
     for (int i = 0; i < 10; i++) {
         TEST_EQUAL(result[i], data[i]);
