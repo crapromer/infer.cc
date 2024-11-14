@@ -271,7 +271,8 @@ __C infinirtStatus_t infinirtMemcpyH2DAsync(void *dst, DeviceType device,
         return infinirtMemcpyH2D(dst, device, deviceId, src, size);
     case DEVICE_NVIDIA:
         return memcpyHost2CudaAsync(dst, deviceId, src, size, stream);
-
+    case DEVICE_ASCEND:
+        return memcpyHost2AscendAsync(dst, deviceId, src, size, stream);
     default:
         return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
     }
