@@ -25,10 +25,15 @@ __C infinirtStatus_t infinirtStreamCreate(infinirtStream_t *pStream, DeviceType 
     switch (device)
     {
     case DEVICE_CPU:
-        (*pStream)->device = DEVICE_CPU;
-        (*pStream)->device_id = 0;
-        (*pStream)->stream = nullptr;
+    {
+        auto stream = new infinirtStream();
+        stream->device = DEVICE_CPU;
+        stream->device_id = 0;
+        stream->stream = nullptr;
+        (*pStream) = stream;
         return INFINIRT_STATUS_SUCCESS;
+    }
+        
     case DEVICE_NVIDIA:
         return createCudaStream(pStream, deviceId);
     case DEVICE_ASCEND:
@@ -68,10 +73,15 @@ __C infinirtStatus_t infinirtEventCreate(infinirtEvent_t *pEvent, DeviceType dev
     switch (device)
     {
     case DEVICE_CPU:
-        (*pEvent)->device = DEVICE_CPU;
-        (*pEvent)->device_id = 0;
-        (*pEvent)->event = nullptr;
+    {
+        auto event = new infinirtEvent();
+        event->device = DEVICE_CPU;
+        event->device_id = 0;
+        event->event = nullptr;
+        (*pEvent) = event;
         return INFINIRT_STATUS_SUCCESS;
+    }
+        
     case DEVICE_NVIDIA:
         return createCudaEvent(pEvent, deviceId);
     case DEVICE_ASCEND:
