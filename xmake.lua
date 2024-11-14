@@ -1,9 +1,14 @@
 add_rules("mode.debug", "mode.release")
 
-add_includedirs(os.getenv("INFINI_ROOT") .. "/include")
+add_includedirs(os.getenv("INFINI_ROOT") .. "/lib/include")
 
 add_includedirs("include")
 
+option("omp")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable or disable OpenMP support")
+option_end()
 
 option("nv-gpu")
     set_default(false)
@@ -38,6 +43,7 @@ if has_config("nv-gpu") then
     add_defines("ENABLE_NV_GPU")
     target("nv-gpu")
         set_kind("static")
+        on_install(function (target) end)
         set_policy("build.cuda.devlink", true)
 
         set_toolchains("cuda")
@@ -76,6 +82,7 @@ if has_config("ascend-npu") then
         -- Other configs
         set_kind("static")
         set_languages("cxx17")
+        on_install(function (target) end)
         -- Add files
         add_files("src/runtime/ascend/*.cc")
         add_cxflags("-lstdc++ -Wall -Werror -fPIC")
@@ -95,22 +102,29 @@ target("infinirt")
 
     set_languages("cxx17")
     add_files("src/runtime/runtime.cc")
+    on_install(function (target) 
+        os.cp(target:targetfile(), os.getenv("INFINI_ROOT") .. "/lib/libinfinirt.so")
+    end)
 target_end()
 
 
-target("infini_infer")
+target("infiniinfer")
     set_kind("shared")
     add_deps("infinirt")
-    add_links(os.getenv("INFINI_ROOT") .. "/liboperators.so")
+    add_links(os.getenv("INFINI_ROOT") .. "/lib/libinfiniop.so")
     set_languages("cxx17")
     add_files("src/models/*.cc")
     add_files("src/tensor/*.cc")
     add_includedirs("src")
+    on_install(function (target) 
+        os.cp(target:targetfile(), os.getenv("INFINI_ROOT") .. "/lib/libinfiniinfer.so")
+    end)
 target_end()
 
 target("infini_infer_test")
     set_kind("binary")
     set_languages("cxx17")
+    on_install(function (target) end)
     add_includedirs("src")
     if has_config("nv-gpu") then
         add_deps("nv-gpu")   
@@ -124,8 +138,10 @@ target("infini_infer_test")
     add_files("src/models/*.cc")
     add_files("src/tensor/*.cc")
    
-    add_links(os.getenv("INFINI_ROOT") .. "/liboperators.so")
-    add_cxflags("-fopenmp")
-    add_ldflags("-fopenmp")
+    add_links(os.getenv("INFINI_ROOT") .. "/lib/libinfiniop.so")
+    if has_config("omp") then
+        add_cxflags("-fopenmp")
+        add_ldflags("-fopenmp")
+    end
     
 target_end()

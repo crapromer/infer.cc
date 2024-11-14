@@ -1,11 +1,14 @@
 import ctypes
 from ctypes import c_void_p, c_uint, POINTER, c_float
 import sys
+import os
 
-if len(sys.argv) < 2:
-    print("Usage: python test_llama.py <path/to/libinfini_infer.so>")
+
+if len(sys.argv) < 3:
+    print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir>")
     sys.exit(1)
-lib_path = sys.argv[1]
+model_path =  sys.argv[2]
+lib_path = os.path.join(os.environ.get("INFINI_ROOT"), "lib", "libinfiniinfer.so")
 lib = ctypes.CDLL(lib_path)
 
 
@@ -18,6 +21,21 @@ class DataType(ctypes.c_int):
 class DeviceType(ctypes.c_int):
     DEVICE_TYPE_CPU = 0
     DEVICE_TYPE_CUDA = 1
+    DEVICE_TYPE_CAMBRICON = 2
+    DEVICE_TYPE_ASCEND = 3
+
+device_type = DeviceType.DEVICE_TYPE_CPU
+if sys.argv[1] == "--cpu":
+    device_type = DeviceType.DEVICE_TYPE_CPU
+elif sys.argv[1] == "--cuda":
+    device_type = DeviceType.DEVICE_TYPE_CUDA
+elif sys.argv[1] == "--cambricon":
+    device_type = DeviceType.DEVICE_TYPE_CAMBRICON
+elif sys.argv[1] == "--ascend":
+    device_type = DeviceType.DEVICE_TYPE_ASCEND
+else:
+    print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir>")
+    sys.exit(1)
 
 
 class LlamaMeta(ctypes.Structure):
@@ -171,10 +189,10 @@ def main():
     import time
 
     llama = transformers.LlamaForCausalLM.from_pretrained(
-        "/data0/shared/panzezhong/TinyLlama-1.1B-Chat-v1.0/", torch_dtype=torch.float16
+        model_path, torch_dtype=torch.float16
     )
     tokenizer = transformers.AutoTokenizer.from_pretrained(
-        "/data0/shared/panzezhong/TinyLlama-1.1B-Chat-v1.0/"
+        model_path
     )
 
     temperature = 0.7
@@ -206,7 +224,7 @@ def main():
     model_instance = lib.create_model(
         ctypes.byref(meta),
         ctypes.byref(weights),
-        DeviceType.DEVICE_TYPE_CUDA,
+        device_type,
         ndev,
         dev_ids,
     )
