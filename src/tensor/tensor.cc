@@ -233,36 +233,6 @@ void Tensor::debug(const std::string &filename) const {
         outFile.close();
         std::cout << "Data written to file: " << filename << "\n";
         return;
-    } else {
-        PANIC("Invalid filename");
-    }
-}
-
-void Tensor::debug() const {
-    RUN_INFINI(
-        infinirtDeviceSynchronize(this->device_type(), this->device_id()));
-    std::cout << "Tensor: "
-              << "shape[ ";
-    for (auto s : this->shape()) {
-        std::cout << s << " ";
-    }
-    std::cout << "] strides[ ";
-    for (auto s : this->strides()) {
-        std::cout << s << " ";
-    }
-    std::cout << "] dtype=" << this->dtype()
-              << " device=" << this->device_type()
-              << " device_id=" << this->device_id() << std::endl;
-    auto dtype = this->dtype();
-    void const *cpu_data;
-    if (this->device_type() != DEVICE_CPU) {
-        void *cpu_memory = std::malloc(this->storage->size);
-        RUN_INFINI(infinirtMemcpyD2H(cpu_memory, this->storage->memory,
-                                     this->device_type(), this->device_id(),
-                                     this->storage->size));
-        cpu_data = cpu_memory;
-    } else {
-        cpu_data = this->data();
     }
 
     switch (dtype) {
@@ -282,3 +252,5 @@ void Tensor::debug() const {
         PANIC("Unsupported data type");
     }
 }
+
+void Tensor::debug() const { this->debug(""); }
