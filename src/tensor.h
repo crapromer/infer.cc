@@ -5,7 +5,7 @@
 #include "utils.h"
 #include <memory>
 #include <vector>
-
+#include <string> 
 typedef uint64_t index_t;
 typedef int64_t stride_t;
 
@@ -90,6 +90,7 @@ private:
     uint32_t device_id() const;
     bool is_contigous() const;
 
+    void debug(const std::string &filename) const;
     void debug() const;
 
     ~Tensor();

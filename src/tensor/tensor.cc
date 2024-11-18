@@ -2,6 +2,7 @@
 #include "../utils.h"
 #include <iostream>
 #include <numeric>
+#include <fstream>
 
 std::shared_ptr<TensorDesc> TensorDesc::create(DataType dtype, const std::vector<index_t> &shape, const std::vector<stride_t> &strides) {
     std::shared_ptr<TensorDesc> desc = std::make_shared<TensorDesc>();
@@ -195,7 +196,7 @@ void print_data(uint16_t const *data, const std::vector<index_t> &shape,
     }
 }
 
-void Tensor::debug() const {
+void Tensor::debug(const std::string &filename) const {
     RUN_INFINI(
         infinirtDeviceSynchronize(this->device_type(), this->device_id()));
     std::cout << "Tensor: "
@@ -221,6 +222,19 @@ void Tensor::debug() const {
     } else {
         cpu_data = this->data();
     }
+
+    if (!filename.empty()){
+        std::ofstream outFile(filename, std::ios::binary);
+        if (!outFile) {
+            std::cerr << "Error opening file for writing: " << filename << "\n";
+            return;
+        }
+        outFile.write(reinterpret_cast<const char*>(cpu_data), this->storage->size);
+        outFile.close();
+        std::cout << "Data written to file: " << filename << "\n";
+        return;
+    }
+
     switch (dtype) {
     case DATA_TYPE_F16:
         print_data((uint16_t const *)((char const *)cpu_data + data_offset()),
@@ -238,3 +252,5 @@ void Tensor::debug() const {
         PANIC("Unsupported data type");
     }
 }
+
+void Tensor::debug() const { this->debug(""); }
