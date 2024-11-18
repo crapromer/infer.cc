@@ -285,6 +285,8 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
         rsrc.handle, &desc_norm_out, logits_out->slice(0, 0, 1)->desc()->get(),
         logits_out->slice(0, 0, 1)->desc()->get(),
         rsrc.w_out_norm->desc()->get(), meta.epsilon));
+    RUN_INFINI(infiniopGetRMSNormWorkspaceSize(desc_norm_out, &temp_size));
+    workspace_size = std::max(workspace_size, temp_size);
     infiniopMatmulDescriptor_t desc_out_embd;
     RUN_INFINI(infiniopCreateMatmulDescriptor(
         rsrc.handle, &desc_out_embd, prob_buf->desc()->get(), 1.0,
@@ -297,6 +299,8 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
         rsrc.handle, &desc_sample,
         TensorDesc::create(DATA_TYPE_U64, {1}, {1})->get(),
         TensorDesc::create(dt_logits, {dvoc}, {1})->get()));
+    RUN_INFINI(infiniopGetRandomSampleWorkspaceSize(desc_sample, &temp_size));
+    workspace_size = std::max(workspace_size, temp_size);
     // Allocate workspace
     RUN_INFINI(infinirtMallocAsync(&workspace, device, device_id,
                                    workspace_size, stream_compute));
