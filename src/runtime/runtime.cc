@@ -4,6 +4,19 @@
 #include <cstdlib>
 #include <string.h>
 
+__C __export infinirtStatus_t infinirtInit(DeviceType device){
+    switch (device){
+        case DEVICE_CPU:
+            return INFINIRT_STATUS_SUCCESS;
+        case DEVICE_NVIDIA:
+            return INFINIRT_STATUS_SUCCESS;
+        case DEVICE_ASCEND:
+            return initAscend();
+        default:
+            return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
+    }
+}
+
 // Device
 __C infinirtStatus_t infinirtDeviceSynchronize(DeviceType device, uint32_t deviceId){
     switch (device)

@@ -1,5 +1,6 @@
 #include "infinirt_ascend.h"
 #include <acl/acl.h>
+#include <mutex>
 
 #define ACL_CALL(x)                                                            \
     do {                                                                       \
@@ -16,6 +17,17 @@
             return INFINIRT_STATUS_BAD_DEVICE;                                 \
         }                                                                      \
     } while (0)
+
+std::once_flag acl_init_flag;
+
+infinirtStatus_t initAscend(){
+    aclError _err = ACL_SUCCESS;
+    std::call_once(acl_init_flag, [&_err]() {
+        _err = aclInit(nullptr);
+    });
+    ACL_CALL(_err);
+    return INFINIRT_STATUS_SUCCESS;
+}
 
 infinirtStatus_t synchronizeAscendDevice(uint32_t deviceId) {
     SWITCH_DEVICE(deviceId);

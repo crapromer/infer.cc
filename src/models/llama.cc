@@ -81,6 +81,7 @@ __C struct Model *create_model(LlamaMeta const *meta,
     ASSERT_EQ(meta->nh % ndev, 0);
     ASSERT_EQ(meta->nkvh % ndev, 0);
     ASSERT_EQ(meta->di % ndev, 0);
+    RUN_INFINI(infinirtInit(device));
     auto dev = std::vector<DeviceResource>();
     for (unsigned int i = 0; i < ndev; i++) {
         dev.push_back(

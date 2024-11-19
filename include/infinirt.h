@@ -37,6 +37,8 @@ typedef enum
     INFINIRT_STATUS_NOT_READY = 7,
 } infinirtStatus_t;
 
+__C __export infinirtStatus_t infinirtInit(DeviceType device);
+
 // Device
 __C __export infinirtStatus_t infinirtDeviceSynchronize(DeviceType device, uint32_t deviceId);
 
