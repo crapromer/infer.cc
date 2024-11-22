@@ -48,6 +48,12 @@ infinirtStatus_t destoryCudaStream(infinirtStream_t stream) {
     return INFINIRT_STATUS_SUCCESS;
 }
 
+infinirtStatus_t synchronizeCudaStream(infinirtStream_t stream){
+    SWITCH_DEVICE(stream->device_id);
+    CUDA_CALL(cudaStreamSynchronize(getCudaStream(stream)));
+    return INFINIRT_STATUS_SUCCESS;
+}
+
 infinirtStatus_t createCudaEvent(infinirtEvent_t *pEvent, uint32_t deviceId) {
     SWITCH_DEVICE(deviceId);
     cudaEvent_t cuda_event;

@@ -73,6 +73,22 @@ __C infinirtStatus_t infinirtStreamDestroy(infinirtStream_t stream)
     }
 }
 
+__C infinirtStatus_t infinirtStreamSynchronize(infinirtStream_t stream){
+    if (stream == nullptr)
+        return INFINIRT_STATUS_SUCCESS;
+    switch (stream->device)
+    {
+    case DEVICE_CPU:
+        return INFINIRT_STATUS_SUCCESS;
+    case DEVICE_NVIDIA:
+        return synchronizeCudaStream(stream);
+    case DEVICE_ASCEND:
+        return synchronizeAscendStream(stream);
+    default:
+        return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
+    }
+}
+
 __C infinirtStatus_t infinirtGetRawStream(void **ptr, infinirtStream_t stream) {
     if (stream == nullptr)
         return INFINIRT_STATUS_INVALID_ARGUMENT;

@@ -12,6 +12,7 @@ infinirtStatus_t synchronizeCudaDevice(uint32_t deviceId) IMPL_WITH_CUDA
 
 infinirtStatus_t createCudaStream(infinirtStream_t *pStream, uint32_t deviceId) IMPL_WITH_CUDA
 infinirtStatus_t destoryCudaStream(infinirtStream_t stream) IMPL_WITH_CUDA
+infinirtStatus_t synchronizeCudaStream(infinirtStream_t stream) IMPL_WITH_CUDA
 
 infinirtStatus_t createCudaEvent(infinirtEvent_t *pEvent, uint32_t deviceId) IMPL_WITH_CUDA
 infinirtStatus_t destoryCudaEvent(infinirtEvent_t event) IMPL_WITH_CUDA

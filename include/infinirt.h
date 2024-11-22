@@ -48,6 +48,7 @@ typedef struct infinirtStream *infinirtStream_t;
 #define INFINIRT_NULL_STREAM nullptr
 __C __export infinirtStatus_t infinirtStreamCreate(infinirtStream_t *pStream, DeviceType device, uint32_t deviceId);
 __C __export infinirtStatus_t infinirtStreamDestroy(infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtStreamSynchronize(infinirtStream_t stream);
 __C __export infinirtStatus_t infinirtGetRawStream(void** ptr, infinirtStream_t stream);
 
 // Event

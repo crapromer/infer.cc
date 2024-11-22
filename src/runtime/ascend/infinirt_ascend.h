@@ -14,6 +14,7 @@ infinirtStatus_t synchronizeAscendDevice(uint32_t deviceId) IMPL_WITH_ASCEND
 
 infinirtStatus_t createAscendStream(infinirtStream_t *pStream, uint32_t deviceId) IMPL_WITH_ASCEND
 infinirtStatus_t destoryAscendStream(infinirtStream_t stream) IMPL_WITH_ASCEND
+infinirtStatus_t synchronizeAscendStream(infinirtStream_t stream) IMPL_WITH_ASCEND
 
 infinirtStatus_t createAscendEvent(infinirtEvent_t *pEvent, uint32_t deviceId) IMPL_WITH_ASCEND
 infinirtStatus_t destoryAscendEvent(infinirtEvent_t event) IMPL_WITH_ASCEND

@@ -55,6 +55,12 @@ infinirtStatus_t destoryAscendStream(infinirtStream_t stream) {
     return INFINIRT_STATUS_SUCCESS;
 }
 
+infinirtStatus_t synchronizeAscendStream(infinirtStream_t stream) {
+    SWITCH_DEVICE(stream->device_id);
+    ACL_CALL(aclrtSynchronizeStream(stream->stream));
+    return INFINIRT_STATUS_SUCCESS;
+}
+
 infinirtStatus_t createAscendEvent(infinirtEvent_t *pEvent, uint32_t deviceId) {
     SWITCH_DEVICE(deviceId);
     aclrtEvent acl_event;
