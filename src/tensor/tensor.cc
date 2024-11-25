@@ -4,7 +4,9 @@
 #include <numeric>
 #include <fstream>
 
-std::shared_ptr<TensorDesc> TensorDesc::create(DataType dtype, const std::vector<index_t> &shape, const std::vector<stride_t> &strides) {
+std::shared_ptr<TensorDesc>
+TensorDesc::create(InfiniDataType_t dtype, const std::vector<index_t> &shape,
+                   const std::vector<stride_t> &strides) {
     std::shared_ptr<TensorDesc> desc = std::make_shared<TensorDesc>();
     infiniopCreateTensorDescriptor(&desc->_desc, shape.size(), shape.data(),
                                    strides.data(), dt_layout(dtype));
@@ -19,7 +21,7 @@ TensorDesc::~TensorDesc() {
 const std::vector<index_t> &Tensor::shape() const { return this->_shape; }
 const std::vector<stride_t> &Tensor::strides() const { return this->_strides; }
 size_t Tensor::ndim() const { return this->_shape.size(); }
-DataType Tensor::dtype() const { return this->_dtype; }
+InfiniDataType_t Tensor::dtype() const { return this->_dtype; }
 size_t Tensor::byte_size() const { return this->_size; }
 DeviceType Tensor::device_type() const { return this->storage->device; }
 uint32_t Tensor::device_id() const { return this->storage->deviceId; }
@@ -31,7 +33,7 @@ size_t Tensor::data_offset() const {
 
 std::shared_ptr<TensorDesc> Tensor::desc() const{ return TensorDesc::create(this->_dtype, this->_shape, this->_strides); }
 
-std::shared_ptr<Tensor> Tensor::buffer(DataType dtype,
+std::shared_ptr<Tensor> Tensor::buffer(InfiniDataType_t dtype,
                                        const std::vector<index_t> &shape,
                                        DeviceType device, uint32_t device_id,
                                        infinirtStream_t stream) {
@@ -63,7 +65,7 @@ std::shared_ptr<Tensor> Tensor::buffer(DataType dtype,
     return tensor;
 }
 
-std::shared_ptr<Tensor> Tensor::weight(void *data, DataType dtype,
+std::shared_ptr<Tensor> Tensor::weight(void *data, InfiniDataType_t dtype,
                                        const std::vector<index_t> &shape,
                                        DeviceType device, uint32_t deviceId) {
     std::shared_ptr<Tensor> tensor = std::make_shared<Tensor>();
@@ -236,15 +238,15 @@ void Tensor::debug(const std::string &filename) const {
     }
 
     switch (dtype) {
-    case DATA_TYPE_F16:
+    case INFINI_F16:
         print_data((uint16_t const *)((char const *)cpu_data + data_offset()),
                    this->shape(), this->strides(), 0);
         break;
-    case DATA_TYPE_F32:
+    case INFINI_F32:
         print_data((float const *)((char const *)cpu_data + data_offset()),
                    this->shape(), this->strides(), 0);
         break;
-    case DATA_TYPE_U64:
+    case INFINI_U64:
         print_data((uint64_t const *)((char const *)cpu_data + data_offset()),
                    this->shape(), this->strides(), 0);
         break;

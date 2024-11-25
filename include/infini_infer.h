@@ -18,17 +18,30 @@
 #include <infini_operators.h>
 #include "infinirt.h"
 
-typedef enum
-{
-    DATA_TYPE_F32,
-    DATA_TYPE_F16,
-    DATA_TYPE_U64,
-} DataType;
-
+#ifndef INFINI_DATATYPE
+#define INFINI_DATATYPE
+typedef enum {
+    INFINI_BYTE = 0,
+    INFINI_I8 = 1,
+    INFINI_I16 = 2,
+    INFINI_I32 = 3,
+    INFINI_I64 = 4,
+    INFINI_U8 = 5,
+    INFINI_U16 = 6,
+    INFINI_U32 = 7,
+    INFINI_U64 = 8,
+    INFINI_F8 = 9,
+    INFINI_F16 = 10,
+    INFINI_F32 = 11,
+    INFINI_F64 = 12,
+    INFINI_BF16 = 13,
+    INFINI_BOOL = 14,
+} InfiniDataType_t;
+#endif
 ////////////////// Models //////////////////
 typedef struct
 {
-    DataType dt_logits, dt_norm, dt_mat;
+    InfiniDataType_t dt_logits, dt_norm, dt_mat;
     unsigned int nlayer, d, nh, nkvh, dh, di, dctx, dvoc;
     float epsilon, theta;
 } LlamaMeta;

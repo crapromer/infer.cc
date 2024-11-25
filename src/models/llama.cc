@@ -184,7 +184,7 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
     auto prob_buf =
         Tensor::buffer(dt_logits, {nreq, dvoc}, device, device_id, stream_data);
     auto result_buf =
-        Tensor::buffer(DATA_TYPE_U64, {nreq}, device, device_id, stream_data);
+        Tensor::buffer(INFINI_U64, {nreq}, device, device_id, stream_data);
     auto result_cpu = std::vector<uint64_t>(nreq);
     // Prepare inputs
     auto batch_pos_ids = std::vector<index_t>(ntok);
@@ -198,10 +198,10 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
 
     std::shared_ptr<Tensor> pos_ids_buf;
     if (rsrc.device == DEVICE_CPU) {
-        pos_ids_buf = Tensor::weight(batch_pos_ids.data(), DATA_TYPE_U64, {ntok},
+        pos_ids_buf = Tensor::weight(batch_pos_ids.data(), INFINI_U64, {ntok},
                                      rsrc.device, rsrc.device_id);
     } else {
-        pos_ids_buf = Tensor::buffer(DATA_TYPE_U64, {ntok}, rsrc.device,
+        pos_ids_buf = Tensor::buffer(INFINI_U64, {ntok}, rsrc.device,
                                      rsrc.device_id, rsrc.stream_compute);
         RUN_INFINI(infinirtMemcpyH2DAsync(pos_ids_buf->data(rsrc.stream_compute), device,
                                device_id, batch_pos_ids.data(), sizeof(uint64_t) * ntok,
@@ -298,7 +298,7 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
     infiniopRandomSampleDescriptor_t desc_sample;
     RUN_INFINI(infiniopCreateRandomSampleDescriptor(
         rsrc.handle, &desc_sample,
-        TensorDesc::create(DATA_TYPE_U64, {1}, {1})->get(),
+        TensorDesc::create(INFINI_U64, {1}, {1})->get(),
         TensorDesc::create(dt_logits, {dvoc}, {1})->get()));
     RUN_INFINI(infiniopGetRandomSampleWorkspaceSize(desc_sample, &temp_size));
     workspace_size = std::max(workspace_size, temp_size);

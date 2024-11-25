@@ -16,7 +16,7 @@ int test_tensor_weight(DeviceType deviceType) {
     auto data =
         std::vector<float>{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
     auto result = std::vector<float>(10);
-    auto tensor = Tensor::weight(data.data(), DATA_TYPE_F32,
+    auto tensor = Tensor::weight(data.data(), INFINI_F32,
                                  std::vector<index_t>({2, 5}), deviceType, 0);
     CHECK_RUN(infinirtMemcpyD2H(result.data(), tensor->data(), deviceType, 0,
                                 tensor->byte_size()));
@@ -31,12 +31,12 @@ int test_tensor_buffer(DeviceType deviceType) {
     auto data =
         std::vector<float>{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
     auto result = std::vector<float>(10);
-    auto tensor1 = Tensor::weight(data.data(), DATA_TYPE_F32,
+    auto tensor1 = Tensor::weight(data.data(), INFINI_F32,
                                   std::vector<index_t>({2, 5}), deviceType, 0);
     infinirtStream_t stream_data, stream_compute;
     CHECK_RUN(infinirtStreamCreate(&stream_data, deviceType, 0));
     CHECK_RUN(infinirtStreamCreate(&stream_compute, deviceType, 0));
-    auto tensor2 = Tensor::buffer(DATA_TYPE_F32, std::vector<index_t>({2, 5}),
+    auto tensor2 = Tensor::buffer(INFINI_F32, std::vector<index_t>({2, 5}),
                                   deviceType, 0, stream_data);
     CHECK_RUN(infinirtMemcpyAsync(tensor2->data(stream_compute),
                                   tensor1->data(stream_compute), deviceType, 0,
@@ -55,8 +55,8 @@ int test_tensor_reshape(DeviceType deviceType) {
                                    7.0, 8.0, 9.0, 10.0, 11.0, 12.0};
     auto result = std::vector<float>(12);
     auto tensor =
-        Tensor::weight(data.data(), DATA_TYPE_F32,
-                       std::vector<index_t>({2, 3, 2}), deviceType, 0);
+        Tensor::weight(data.data(), INFINI_F32, std::vector<index_t>({2, 3, 2}),
+                       deviceType, 0);
     tensor->dim_merge(0, 1);
     TEST_EQUAL(tensor->shape(), std::vector<index_t>({6, 2}));
     TEST_EQUAL(tensor->strides(), std::vector<stride_t>({2, 1}));
@@ -70,8 +70,8 @@ int test_tensor_slice(DeviceType deviceType) {
     auto data = std::vector<float>{1.0, 2.0, 3.0, 4.0,  5.0,  6.0,
                                    7.0, 8.0, 9.0, 10.0, 11.0, 12.0};
     auto tensor =
-        Tensor::weight(data.data(), DATA_TYPE_F32,
-                       std::vector<index_t>({2, 3, 2}), deviceType, 0);
+        Tensor::weight(data.data(), INFINI_F32, std::vector<index_t>({2, 3, 2}),
+                       deviceType, 0);
     auto tensor1 = tensor->slice(0, 1, 1);
     TEST_EQUAL(tensor1->shape(), std::vector<index_t>({1, 3, 2}));
     TEST_EQUAL(tensor1->strides(), std::vector<stride_t>({6, 2, 1}));

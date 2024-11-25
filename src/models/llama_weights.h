@@ -129,8 +129,7 @@ inline std::shared_ptr<Tensor> get_sin_table(LlamaMeta const *meta,
         }
     }
     auto shape = std::vector<index_t>({meta->dctx, meta->dh});
-    auto tensor =
-        Tensor::weight(table, DATA_TYPE_F32, shape, device, device_id);
+    auto tensor = Tensor::weight(table, INFINI_F32, shape, device, device_id);
     std::free(table);
     return tensor;
 }
@@ -150,8 +149,7 @@ inline std::shared_ptr<Tensor> get_cos_table(LlamaMeta const *meta,
         }
     }
     auto shape = std::vector<index_t>({meta->dctx, meta->dh});
-    auto tensor =
-        Tensor::weight(table, DATA_TYPE_F32, shape, device, device_id);
+    auto tensor = Tensor::weight(table, INFINI_F32, shape, device, device_id);
     std::free(table);
     return tensor;
 }
