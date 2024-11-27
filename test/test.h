@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../include/infinirt.h"
+#include "../include/infiniccl.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -27,3 +28,4 @@
     } while (0)
 
 void test_tensor(DeviceType);
+void test_ccl(DeviceType);

@@ -52,7 +52,7 @@ inline std::shared_ptr<Tensor> get_attn_qkv(
     auto nh = meta->nh;
     auto dh = meta->dh;
     auto d = meta->d;
-    size_t offset = idev * ((nkvh * 2 + nh) / ndev * dh) * d;
+    size_t offset = idev * ((nkvh * 2 + nh) / ndev * dh) * d * dt_size(meta->dt_mat);
     auto shape = std::vector<index_t>({(nh + 2 * nkvh) / ndev * dh, d});
     return Tensor::weight((char *)(w->attn_qkv[layer]) + offset, meta->dt_mat,
                           shape, device, device_id)
@@ -67,7 +67,7 @@ inline std::shared_ptr<Tensor> get_attn_o(LlamaMeta const *meta,
     auto nh = meta->nh;
     auto dh = meta->dh;
     auto d = meta->d;
-    size_t offset = idev * d * (nh / ndev * dh);
+    size_t offset = idev * d * (nh / ndev * dh) * dt_size(meta->dt_mat);
     auto shape = std::vector<index_t>({d, nh / ndev * dh});
     return Tensor::weight((char *)(w->attn_o[layer]) + offset, meta->dt_mat,
                           shape, device, device_id)
@@ -92,7 +92,7 @@ inline std::shared_ptr<Tensor> get_ffn_gate_up(
 {
     auto di = meta->di;
     auto d = meta->d;
-    size_t offset = idev * (2 * di / ndev) * d;
+    size_t offset = idev * (2 * di / ndev) * d * dt_size(meta->dt_mat);
     auto shape = std::vector<index_t>({2 * di / ndev, d});
     return Tensor::weight((char *)(w->ffn_gate_up[layer]) + offset,
                           meta->dt_mat, shape, device, device_id)
@@ -107,7 +107,7 @@ inline std::shared_ptr<Tensor> get_ffn_down(
 {
     auto di = meta->di;
     auto d = meta->d;
-    size_t offset = idev * d * (di / ndev);
+    size_t offset = idev * d * (di / ndev) * dt_size(meta->dt_mat);
     auto shape = std::vector<index_t>({d, di / ndev});
     return Tensor::weight((char *)(w->ffn_down[layer]) + offset, meta->dt_mat,
                           shape, device, device_id)

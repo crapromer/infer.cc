@@ -58,6 +58,15 @@ if has_config("nv-gpu") then
 
         set_languages("cxx17")
         add_files("src/runtime/cuda/*.cc")
+        -- Check if NCCL_ROOT is defined
+        local nccl_root = os.getenv("NCCL_ROOT")
+        if nccl_root then
+            add_includedirs(nccl_root .. "/include")
+            add_links(nccl_root .. "/lib/libnccl.so")
+        else
+            add_links("nccl") -- Fall back to default nccl linking
+        end
+        add_files("src/ccl/cuda/*.cc")
     target_end()
 end
 
@@ -107,10 +116,26 @@ target("infinirt")
     end)
 target_end()
 
+target("infiniccl")
+    set_kind("shared")
+
+    if has_config("nv-gpu") then
+        add_deps("nv-gpu")
+    end
+    if has_config("ascend-npu") then
+        add_deps("ascend-npu")
+    end
+    set_languages("cxx17")
+    add_files("src/ccl/infiniccl.cc")
+    on_install(function (target) 
+        os.cp(target:targetfile(), os.getenv("INFINI_ROOT") .. "/lib/libinfiniccl.so")
+    end)
+target_end()
 
 target("infiniinfer")
     set_kind("shared")
     add_deps("infinirt")
+    add_deps("infiniccl")
     add_links(os.getenv("INFINI_ROOT") .. "/lib/libinfiniop.so")
     set_languages("cxx17")
     add_files("src/models/*.cc")
@@ -132,9 +157,12 @@ target("infini_infer_test")
     if has_config("ascend-npu") then
         add_deps("ascend-npu")
     end
+    add_cxflags("-g", "-O0")
+    add_ldflags("-g") 
     add_files("test/test.cc")
-    add_files("test/tensor/*.cc")
+    add_files("test/tensor/*.cc", "test/ccl/*.cc")
     add_files("src/runtime/runtime.cc")
+    add_files("src/ccl/infiniccl.cc")
     add_files("src/models/*.cc")
     add_files("src/tensor/*.cc")
    

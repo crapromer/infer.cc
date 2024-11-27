@@ -13,9 +13,21 @@ lib = ctypes.CDLL(lib_path)
 
 
 class DataType(ctypes.c_int):
-    DATA_TYPE_F32 = 0
-    DATA_TYPE_F16 = 1
-    DATA_TYPE_U64 = 2
+    INFINI_BYTE = 0
+    INFINI_I8 = 1
+    INFINI_I16 = 2
+    INFINI_I32 = 3
+    INFINI_I64 = 4
+    INFINI_U8 = 5
+    INFINI_U16 = 6
+    INFINI_U32 = 7
+    INFINI_U64 = 8
+    INFINI_F8 = 9
+    INFINI_F16 = 10
+    INFINI_F32 = 11
+    INFINI_F64 = 12
+    INFINI_BF16 = 13
+    INFINI_BOOL = 14
 
 
 class DeviceType(ctypes.c_int):
@@ -71,7 +83,7 @@ class LlamaWeights(ctypes.Structure):
         ("ffn_down", POINTER(c_void_p)),
     ]
 
-    def __init__(self, llama):
+    def __init__(self, llama, ndev=1):
         import torch
 
         self.nlayer = llama.config.num_hidden_layers
@@ -89,30 +101,48 @@ class LlamaWeights(ctypes.Structure):
         nkvh = llama.config.num_key_value_heads
         dh = llama.config.hidden_size // llama.config.num_attention_heads
         d = llama.config.hidden_size
+        di = llama.config.intermediate_size
+        assert nh % nkvh == 0
+        assert nh % ndev == 0
+        assert nkvh % ndev == 0
+        assert di % ndev == 0
+        def qkv_slices(_i):
+            _Q = state_dict[f"model.layers.{_i}.self_attn.q_proj.weight"].reshape([nh, 2, dh // 2, d]).transpose(1, 2)
+            _K = state_dict[f"model.layers.{_i}.self_attn.k_proj.weight"].reshape([nkvh, 2, dh // 2, d]).transpose(1, 2)
+            _V = state_dict[f"model.layers.{_i}.self_attn.v_proj.weight"].reshape([nkvh, dh // 2, 2, d])
+            _result = []
+            _nh = nh // ndev
+            _nkvh = nkvh // ndev
+            for _idev in range(ndev):
+                _result.append(
+                    _Q[_idev * _nh:(_idev + 1) * _nh, :, :, :]
+                )
+                _result.append(
+                    _K[_idev * _nkvh : (_idev + 1) * _nkvh, :, :, :]
+                )
+                _result.append(
+                    _V[_idev * _nkvh : (_idev + 1) * _nkvh, :, :]
+                )
+            return _result
         self.qkv_tensor = [
             torch.concat(
-                [
-                    state_dict[f"model.layers.{i}.self_attn.q_proj.weight"]
-                    .reshape([nh, 2, dh // 2, d])
-                    .transpose(1, 2)
-                    .reshape(nh * dh, d)
-                    .clone(),
-                    state_dict[f"model.layers.{i}.self_attn.k_proj.weight"]
-                    .reshape([nkvh, 2, dh // 2, d])
-                    .transpose(1, 2)
-                    .reshape(nkvh * dh, d)
-                    .clone(),
-                    state_dict[f"model.layers.{i}.self_attn.v_proj.weight"],
-                ]
+                qkv_slices(i)
             )
             for i in range(self.nlayer)
         ]
         self.attn_qkv = (c_void_p * self.nlayer)(
             *[self.qkv_tensor[i].data_ptr() for i in range(self.nlayer)]
         )
+        self.attn_o_tensor = [
+            state_dict[f"model.layers.{i}.self_attn.o_proj.weight"]
+            .reshape([d, ndev, nh//ndev * dh])
+            .transpose(0, 1)
+            .contiguous()
+            for i in range(self.nlayer)
+        ]
         self.attn_o = (c_void_p * self.nlayer)(
             *[
-                state_dict[f"model.layers.{i}.self_attn.o_proj.weight"].data_ptr()
+                self.attn_o_tensor[i].data_ptr()
                 for i in range(self.nlayer)
             ]
         )
@@ -124,12 +154,23 @@ class LlamaWeights(ctypes.Structure):
                 for i in range(self.nlayer)
             ]
         )
+        def gate_up_slices(_i):
+            _result = []
+            _di = di // ndev
+            for _idev in range(ndev):
+                _start = _idev * _di
+                _end = (_idev + 1) * _di
+                _result.append(
+                    state_dict[f"model.layers.{_i}.mlp.gate_proj.weight"][_start:_end, :]
+                )
+                _result.append(
+                    state_dict[f"model.layers.{_i}.mlp.up_proj.weight"][_start:_end, :]
+                )
+            return _result
+        
         self.gate_up_tensor = [
             torch.concat(
-                [
-                    state_dict[f"model.layers.{i}.mlp.gate_proj.weight"],
-                    state_dict[f"model.layers.{i}.mlp.up_proj.weight"],
-                ]
+                gate_up_slices(i)
             )
             for i in range(self.nlayer)
         ]
@@ -137,9 +178,17 @@ class LlamaWeights(ctypes.Structure):
         self.ffn_gate_up = (c_void_p * self.nlayer)(
             *[self.gate_up_tensor[i].data_ptr() for i in range(self.nlayer)]
         )
+        
+        self.ffn_down_tensor = [
+            state_dict[f"model.layers.{i}.mlp.down_proj.weight"]
+            .reshape([d, ndev, di//ndev])
+            .transpose(0, 1)
+            .contiguous()
+            for i in range(self.nlayer)
+        ]
         self.ffn_down = (c_void_p * self.nlayer)(
             *[
-                state_dict[f"model.layers.{i}.mlp.down_proj.weight"].data_ptr()
+                self.ffn_down_tensor[i].data_ptr()
                 for i in range(self.nlayer)
             ]
         )
@@ -181,8 +230,8 @@ lib.infer.argtypes = [
 
 
 def main():
-    ndev = 1
-    dev_ids = (c_uint * ndev)(0)
+    ndev = 2
+    dev_ids = (c_uint * ndev)(*[i for i in range(ndev)])
 
     import torch
     import transformers
@@ -195,14 +244,14 @@ def main():
         model_path
     )
 
-    temperature = 0.7
+    temperature = 1.0
     topk = 1
-    topp = 0.8
+    topp = 1.0
 
     meta = LlamaMeta(
-        dt_logits=DataType.DATA_TYPE_F16,
-        dt_norm=DataType.DATA_TYPE_F16,
-        dt_mat=DataType.DATA_TYPE_F16,
+        dt_logits=DataType.INFINI_F16,
+        dt_norm=DataType.INFINI_F16,
+        dt_mat=DataType.INFINI_F16,
         nlayer=llama.config.num_hidden_layers,
         d=llama.config.hidden_size,
         nh=llama.config.num_attention_heads,
@@ -219,7 +268,7 @@ def main():
         theta=llama.config.rope_theta,
     )
 
-    weights = LlamaWeights(llama)
+    weights = LlamaWeights(llama, ndev)
 
     model_instance = lib.create_model(
         ctypes.byref(meta),
