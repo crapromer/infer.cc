@@ -86,6 +86,8 @@ if has_config("ascend-npu") then
     add_links("libruntime.so")  
     add_linkdirs(ASCEND_HOME .. "/../../driver/lib64/driver")
     add_links("libascend_hal.so")
+    add_includedirs(ASCEND_HOME .. "/include/hccl")
+    add_links("libhccl.so")
 
     target("ascend-npu")
         -- Other configs
@@ -94,6 +96,7 @@ if has_config("ascend-npu") then
         on_install(function (target) end)
         -- Add files
         add_files("src/runtime/ascend/*.cc")
+        add_files("src/ccl/ascend/*cc")
         add_cxflags("-lstdc++ -Wall -Werror -fPIC")
 
     target_end()
@@ -165,7 +168,7 @@ target("infini_infer_test")
     add_files("src/ccl/infiniccl.cc")
     add_files("src/models/*.cc")
     add_files("src/tensor/*.cc")
-   
+    add_cxflags("-lstdc++ -Wall -fPIC")
     add_links(os.getenv("INFINI_ROOT") .. "/lib/libinfiniop.so")
     if has_config("omp") then
         add_cxflags("-fopenmp")

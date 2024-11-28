@@ -25,10 +25,12 @@ int allreduce_sum(DeviceType deviceType, uint32_t deviceID, infinicclComm_t comm
     auto recv_buf =
         Tensor::weight(result.data(), INFINI_F32,
                        std::vector<index_t>({result.size()}), deviceType, deviceID);
-
+    infinirtStream_t stream;
+    CHECK_RUN(infinirtStreamCreate(&stream, deviceType, deviceID));
     CHECK_RUN(infinicclAllReduceSum(comm, send_buf->data(), recv_buf->data(),
                                     data.size(), INFINI_F32,
-                                    INFINIRT_NULL_STREAM));
+                                    stream));
+    infinirtStreamSynchronize(stream);
     CHECK_RUN(infinirtMemcpyD2H(result.data(), recv_buf->data(), deviceType,
                                 deviceID, recv_buf->byte_size()));
     output[deviceID] = std::move(result);

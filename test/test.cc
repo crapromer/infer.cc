@@ -11,5 +11,7 @@ int main() {
 #ifdef ENABLE_ASCEND_NPU
     printf("Test tensor functions: Ascend\n");
     test_tensor(DEVICE_ASCEND);
+    printf("Test CCL functions: Ascend\n");
+    test_ccl(DEVICE_ASCEND);
 #endif
 }

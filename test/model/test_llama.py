@@ -230,7 +230,7 @@ lib.infer.argtypes = [
 
 
 def main():
-    ndev = 2
+    ndev = 1
     dev_ids = (c_uint * ndev)(*[i for i in range(ndev)])
 
     import torch
