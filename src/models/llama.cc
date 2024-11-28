@@ -24,10 +24,11 @@ struct DeviceResource
     infinicclComm_t comm;
 };
 
-inline DeviceResource
-create_device_resource(LlamaMeta const *meta, LlamaWeights const *weights,
-                       DeviceType device, unsigned int idev, unsigned int ndev,
-                       unsigned int dev_id, infinicclComm_t comm) {
+void create_device_resource(DeviceResource *rsrc, LlamaMeta const *meta,
+                                   LlamaWeights const *weights,
+                                   DeviceType device, unsigned int idev,
+                                   unsigned int ndev, unsigned int dev_id,
+                                   infinicclComm_t comm) {
     infiniopHandle_t handle;
     infiniopCreateHandle(&handle, (Device)device, dev_id);
     infinirtStream_t stream_compute, stream_data, stream_cache;
@@ -51,24 +52,24 @@ create_device_resource(LlamaMeta const *meta, LlamaWeights const *weights,
             get_ffn_down(meta, weights, layer, idev, ndev, device, dev_id));
     }
 
-    return DeviceResource{device,
-                          dev_id,
-                          handle,
-                          get_in_embd(meta, weights, device, dev_id),
-                          get_out_norm(meta, weights, device, dev_id),
-                          get_out_embd(meta, weights, device, dev_id),
-                          get_sin_table(meta, device, dev_id),
-                          get_cos_table(meta, device, dev_id),
-                          w_attn_norm,
-                          w_attn_qkv,
-                          w_attn_out,
-                          w_ffn_norm,
-                          w_ffn_gate_up,
-                          w_ffn_down,
-                          stream_compute,
-                          stream_data,
-                          stream_cache,
-                          comm};
+    *rsrc = DeviceResource{device,
+                              dev_id,
+                              handle,
+                              get_in_embd(meta, weights, device, dev_id),
+                              get_out_norm(meta, weights, device, dev_id),
+                              get_out_embd(meta, weights, device, dev_id),
+                              get_sin_table(meta, device, dev_id),
+                              get_cos_table(meta, device, dev_id),
+                              w_attn_norm,
+                              w_attn_qkv,
+                              w_attn_out,
+                              w_ffn_norm,
+                              w_ffn_gate_up,
+                              w_ffn_down,
+                              stream_compute,
+                              stream_data,
+                              stream_cache,
+                              comm};
 }
 
 struct Model
@@ -86,15 +87,21 @@ __C struct Model *create_model(LlamaMeta const *meta,
     ASSERT_EQ(meta->nkvh % ndev, 0);
     ASSERT_EQ(meta->di % ndev, 0);
     RUN_INFINI(infinirtInit(device));
-    auto dev = std::vector<DeviceResource>();
+    auto dev = std::vector<DeviceResource>(ndev);
     auto comms = std::vector<infinicclComm_t>(ndev, nullptr);
     if (ndev > 1) {
         RUN_INFINI(infinicclCommInitAll(device, comms.data(), ndev, dev_ids));
     }
-    for (unsigned int i = 0; i < ndev; i++) {
-        dev.push_back(create_device_resource(meta, weights, device, i, ndev,
-                                             dev_ids[i], comms[i]));
+    auto threads = std::vector<std::thread>(ndev);
+    for (unsigned int idev = 0; idev < ndev; idev++) {
+        threads[idev] =
+            std::thread(create_device_resource, &(dev[idev]), meta, weights,
+                        device, idev, ndev, dev_ids[idev], comms[idev]);
     }
+    for (unsigned int idev = 0; idev < ndev; idev++) {
+        threads[idev].join();
+    }
+    
     auto model = new Model(*meta, std::move(dev));
     return model;
 }
@@ -365,7 +372,7 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
             desc_attn_o, workspace, workspace_size,
             logits_in->data(stream_compute), o_buf->data(),
             rsrc.w_attn_out[layer]->data(stream_compute), stream_compute_raw));
-            
+
         // All_reduce if distributed
         if (rsrc.comm != nullptr) {
             RUN_INFINI(infinicclAllReduceSum(
@@ -478,6 +485,7 @@ __C void destroy_model(struct Model *model) {
         infinirtStreamDestroy(model->dev[i].stream_compute);
         infinirtStreamDestroy(model->dev[i].stream_data);
         infinirtStreamDestroy(model->dev[i].stream_cache);
+        infinicclCommDestroy(model->dev[i].comm);
     }
     delete model;
 }
