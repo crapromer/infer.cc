@@ -32,6 +32,17 @@ option("ascend-npu")
     add_defines("ENABLE_ASCEND_NPU")
 option_end()
 
+option("ccl")
+    set_default(true)
+    set_showmenu(true)
+    set_description("Enable or disable multi-device communication support")
+option_end()
+
+option("infer")
+    set_default(true)
+    set_showmenu(true)
+    set_description("Enable or disable end-to-end inference support")
+option_end()
 
 if is_mode("debug") then
     add_cxflags("-g -O0")
@@ -58,15 +69,17 @@ if has_config("nv-gpu") then
 
         set_languages("cxx17")
         add_files("src/runtime/cuda/*.cc")
-        -- Check if NCCL_ROOT is defined
-        local nccl_root = os.getenv("NCCL_ROOT")
-        if nccl_root then
-            add_includedirs(nccl_root .. "/include")
-            add_links(nccl_root .. "/lib/libnccl.so")
-        else
-            add_links("nccl") -- Fall back to default nccl linking
+        if has_config("ccl") then
+            -- Check if NCCL_ROOT is defined
+            local nccl_root = os.getenv("NCCL_ROOT")
+            if nccl_root then
+                add_includedirs(nccl_root .. "/include")
+                add_links(nccl_root .. "/lib/libnccl.so")
+            else
+                add_links("nccl") -- Fall back to default nccl linking
+            end
+            add_files("src/ccl/cuda/*.cc")
         end
-        add_files("src/ccl/cuda/*.cc")
     target_end()
 end
 
@@ -86,8 +99,7 @@ if has_config("ascend-npu") then
     add_links("libruntime.so")  
     add_linkdirs(ASCEND_HOME .. "/../../driver/lib64/driver")
     add_links("libascend_hal.so")
-    add_includedirs(ASCEND_HOME .. "/include/hccl")
-    add_links("libhccl.so")
+    
 
     target("ascend-npu")
         -- Other configs
@@ -96,7 +108,11 @@ if has_config("ascend-npu") then
         on_install(function (target) end)
         -- Add files
         add_files("src/runtime/ascend/*.cc")
-        add_files("src/ccl/ascend/*cc")
+        if has_config("ccl") then
+            add_includedirs(ASCEND_HOME .. "/include/hccl")
+            add_links("libhccl.so")
+            add_files("src/ccl/ascend/*cc")
+        end
         add_cxflags("-lstdc++ -Wall -Werror -fPIC")
 
     target_end()
@@ -119,6 +135,7 @@ target("infinirt")
     end)
 target_end()
 
+if has_config("ccl") then
 target("infiniccl")
     set_kind("shared")
 
@@ -134,7 +151,9 @@ target("infiniccl")
         os.cp(target:targetfile(), os.getenv("INFINI_ROOT") .. "/lib/libinfiniccl.so")
     end)
 target_end()
+end
 
+if has_config("infer") then
 target("infiniinfer")
     set_kind("shared")
     add_deps("infinirt")
@@ -148,7 +167,9 @@ target("infiniinfer")
         os.cp(target:targetfile(), os.getenv("INFINI_ROOT") .. "/lib/libinfiniinfer.so")
     end)
 target_end()
+end
 
+if has_config("infer") then
 target("infini_infer_test")
     set_kind("binary")
     set_languages("cxx17")
@@ -163,16 +184,22 @@ target("infini_infer_test")
     add_cxflags("-g", "-O0")
     add_ldflags("-g") 
     add_files("test/test.cc")
-    add_files("test/tensor/*.cc", "test/ccl/*.cc")
+    add_files("test/tensor/*.cc")
     add_files("src/runtime/runtime.cc")
-    add_files("src/ccl/infiniccl.cc")
+    if has_config("ccl") then
+        add_files("src/ccl/infiniccl.cc")
+        add_files("test/ccl/*.cc")
+    end
+    
     add_files("src/models/*.cc")
+    add_links(os.getenv("INFINI_ROOT") .. "/lib/libinfiniop.so")
     add_files("src/tensor/*.cc")
     add_cxflags("-lstdc++ -Wall -fPIC")
-    add_links(os.getenv("INFINI_ROOT") .. "/lib/libinfiniop.so")
+    
     if has_config("omp") then
         add_cxflags("-fopenmp")
         add_ldflags("-fopenmp")
     end
     
 target_end()
+end

@@ -1,4 +1,5 @@
 #include "../../include/infinirt.h"
+#include "../../include/infiniccl.h"
 #include "../../src/tensor.h"
 #include "../test.h"
 #include <thread>
