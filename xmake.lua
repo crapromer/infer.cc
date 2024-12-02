@@ -1,7 +1,5 @@
 add_rules("mode.debug", "mode.release")
 
-add_includedirs(os.getenv("INFINI_ROOT") .. "/lib/include")
-
 add_includedirs("include")
 
 option("omp")
@@ -42,6 +40,7 @@ option("infer")
     set_default(true)
     set_showmenu(true)
     set_description("Enable or disable end-to-end inference support")
+    add_includedirs(os.getenv("INFINI_ROOT") .. "/lib/include")
 option_end()
 
 if is_mode("debug") then
