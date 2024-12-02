@@ -15,7 +15,6 @@ option("nv-gpu")
     add_defines("ENABLE_NV_GPU")
 option_end()
 
-
 option("cambricon-mlu")
     set_default(false)
     set_showmenu(true)
@@ -40,7 +39,6 @@ option("infer")
     set_default(true)
     set_showmenu(true)
     set_description("Enable or disable end-to-end inference support")
-    add_includedirs(os.getenv("INFINI_ROOT") .. "/lib/include")
 option_end()
 
 if is_mode("debug") then
@@ -48,6 +46,9 @@ if is_mode("debug") then
     add_defines("DEBUG_MODE")
 end
 
+if has_config("infer") then
+    add_includedirs(os.getenv("INFINI_ROOT") .. "/lib/include")
+end
 
 if has_config("nv-gpu") then
     add_defines("ENABLE_NV_GPU")
@@ -95,10 +96,9 @@ if has_config("ascend-npu") then
     add_links("libascendcl.so")
     add_links("libnnopbase.so")
     add_links("libopapi.so")
-    add_links("libruntime.so")  
+    add_links("libruntime.so")
     add_linkdirs(ASCEND_HOME .. "/../../driver/lib64/driver")
     add_links("libascend_hal.so")
-    
 
     target("ascend-npu")
         -- Other configs
@@ -129,7 +129,7 @@ target("infinirt")
 
     set_languages("cxx17")
     add_files("src/runtime/runtime.cc")
-    on_install(function (target) 
+    on_install(function (target)
         os.cp(target:targetfile(), os.getenv("INFINI_ROOT") .. "/lib/libinfinirt.so")
     end)
 target_end()
@@ -146,7 +146,7 @@ target("infiniccl")
     end
     set_languages("cxx17")
     add_files("src/ccl/infiniccl.cc")
-    on_install(function (target) 
+    on_install(function (target)
         os.cp(target:targetfile(), os.getenv("INFINI_ROOT") .. "/lib/libinfiniccl.so")
     end)
 target_end()
@@ -162,7 +162,7 @@ target("infiniinfer")
     add_files("src/models/*.cc")
     add_files("src/tensor/*.cc")
     add_includedirs("src")
-    on_install(function (target) 
+    on_install(function (target)
         os.cp(target:targetfile(), os.getenv("INFINI_ROOT") .. "/lib/libinfiniinfer.so")
     end)
 target_end()
@@ -175,13 +175,13 @@ target("infini_infer_test")
     on_install(function (target) end)
     add_includedirs("src")
     if has_config("nv-gpu") then
-        add_deps("nv-gpu")   
+        add_deps("nv-gpu")
     end
     if has_config("ascend-npu") then
         add_deps("ascend-npu")
     end
     add_cxflags("-g", "-O0")
-    add_ldflags("-g") 
+    add_ldflags("-g")
     add_files("test/test.cc")
     add_files("test/tensor/*.cc")
     add_files("src/runtime/runtime.cc")
@@ -189,16 +189,15 @@ target("infini_infer_test")
         add_files("src/ccl/infiniccl.cc")
         add_files("test/ccl/*.cc")
     end
-    
+
     add_files("src/models/*.cc")
     add_links(os.getenv("INFINI_ROOT") .. "/lib/libinfiniop.so")
     add_files("src/tensor/*.cc")
     add_cxflags("-lstdc++ -Wall -fPIC")
-    
+
     if has_config("omp") then
         add_cxflags("-fopenmp")
         add_ldflags("-fopenmp")
     end
-    
 target_end()
 end
