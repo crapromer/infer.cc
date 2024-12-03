@@ -25,11 +25,14 @@ infinirtStatus_t synchronizeAscendEvent(infinirtEvent_t event) IMPL_WITH_ASCEND
 
 infinirtStatus_t mallocAscend(void **pMemory, uint32_t deviceId, size_t size) IMPL_WITH_ASCEND
 infinirtStatus_t mallocAscendAsync(void **pMemory, uint32_t deviceId, size_t size, infinirtStream_t stream) IMPL_WITH_ASCEND
+infinirtStatus_t mallocHostAscend(void **pMemory, uint32_t deviceId, size_t size) IMPL_WITH_ASCEND
 infinirtStatus_t freeAscend(void *ptr, uint32_t deviceId) IMPL_WITH_ASCEND
 infinirtStatus_t freeAscendAsync(void *ptr, uint32_t deviceId, infinirtStream_t stream) IMPL_WITH_ASCEND
+infinirtStatus_t freeHostAscend(void *ptr, uint32_t deviceId) IMPL_WITH_ASCEND
 infinirtStatus_t memcpyHost2Ascend(void *dst, uint32_t deviceId, const void *src, size_t size) IMPL_WITH_ASCEND
 infinirtStatus_t memcpyHost2AscendAsync(void *dst, uint32_t deviceId, const void *src, size_t size, infinirtStream_t stream) IMPL_WITH_ASCEND
 infinirtStatus_t memcpyAscend2Host(void *dst, const void *src, uint32_t deviceId, size_t size) IMPL_WITH_ASCEND
+infinirtStatus_t memcpyAscend(void *dst, const void *src, uint32_t deviceId, size_t size) IMPL_WITH_ASCEND
 infinirtStatus_t memcpyAscendAsync(void *dst, const void *src, uint32_t deviceId, size_t size, infinirtStream_t stream) IMPL_WITH_ASCEND
 
 #endif

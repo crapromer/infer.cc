@@ -260,6 +260,8 @@ __C __export infinirtStatus_t infinirtMallocHost(void **pMemory,
         return infinirtMalloc(pMemory, device, deviceId, size);
     case DEVICE_NVIDIA:
         return mallocHostCuda(pMemory, deviceId, size);
+    case DEVICE_ASCEND:
+        return mallocHostAscend(pMemory, deviceId, size);
     default:
         return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
     }
@@ -313,6 +315,8 @@ __C __export infinirtStatus_t infinirtFreeHost(void *ptr, DeviceType device,
         return infinirtFree(ptr, device, deviceId);
     case DEVICE_NVIDIA:
         return freeHostCuda(ptr, deviceId);
+    case DEVICE_ASCEND:
+        return freeHostAscend(ptr, deviceId);
     default:
         return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
     }
@@ -391,6 +395,8 @@ __C __export infinirtStatus_t infinirtMemcpy(void *dst, const void *src,
         return INFINIRT_STATUS_SUCCESS;
     case DEVICE_NVIDIA:
         return memcpyCuda(dst, src, deviceId, size);
+    case DEVICE_ASCEND:
+        return memcpyAscend(dst, src, deviceId, size);
     default:
         return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
     }

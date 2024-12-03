@@ -122,6 +122,12 @@ infinirtStatus_t mallocAscendAsync(void **pMemory, uint32_t deviceId,
     return mallocAscend(pMemory, deviceId, size);
 }
 
+infinirtStatus_t mallocHostAscend(void **pMemory, uint32_t deviceId, size_t size) {
+    SWITCH_DEVICE(deviceId);
+    ACL_CALL(aclrtMallocHost(pMemory, size));
+    return INFINIRT_STATUS_SUCCESS;
+}
+
 infinirtStatus_t freeAscend(void *ptr, uint32_t deviceId) {
     SWITCH_DEVICE(deviceId);
     ACL_CALL(aclrtFree(ptr));
@@ -132,6 +138,12 @@ infinirtStatus_t freeAscendAsync(void *ptr, uint32_t deviceId,
                                  infinirtStream_t stream) {
     /// @todo Ascend does not support async free yet
     return freeAscend(ptr, deviceId);
+}
+
+infinirtStatus_t freeHostAscend(void *ptr, uint32_t deviceId){
+    SWITCH_DEVICE(deviceId);
+    ACL_CALL(aclrtFreeHost(ptr));
+    return INFINIRT_STATUS_SUCCESS;
 }
 
 infinirtStatus_t memcpyHost2Ascend(void *dst, uint32_t deviceId,
@@ -155,6 +167,13 @@ infinirtStatus_t memcpyAscend2Host(void *dst, const void *src,
     ACL_CALL(aclrtMemcpy(dst, size, src, size, ACL_MEMCPY_DEVICE_TO_HOST));
     return INFINIRT_STATUS_SUCCESS;
 }
+
+infinirtStatus_t memcpyAscend(void *dst, const void *src, uint32_t deviceId, size_t size){
+    SWITCH_DEVICE(deviceId);
+    ACL_CALL(aclrtMemcpy(dst, size, src, size, ACL_MEMCPY_DEVICE_TO_DEVICE));
+    return INFINIRT_STATUS_SUCCESS;
+}
+
 infinirtStatus_t memcpyAscendAsync(void *dst, const void *src,
                                    uint32_t deviceId, size_t size,
                                    infinirtStream_t stream) {
