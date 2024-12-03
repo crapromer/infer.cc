@@ -66,6 +66,7 @@ if has_config("nv-gpu") then
             add_cuflags("-Xcompiler=-fPIC")
             add_culdflags("-Xcompiler=-fPIC")
         end
+        add_cxflags("-fPIC")
 
         set_languages("cxx17")
         add_files("src/runtime/cuda/*.cc")

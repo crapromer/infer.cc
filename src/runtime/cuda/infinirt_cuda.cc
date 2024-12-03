@@ -1,10 +1,13 @@
 #include "infinirt_cuda.h"
 #include "cuda_runtime.h"
+#include <iostream>
 
 #define CUDA_CALL(x)                                                           \
     do {                                                                       \
         cudaError_t err = (x);                                                 \
         if (err != cudaSuccess) {                                              \
+            std::cerr << "Cuda error: " << err << " in function " << __func__  \
+                      << std::endl;                                            \
             return INFINIRT_STATUS_EXECUTION_FAILED;                           \
         }                                                                      \
     } while (0)
@@ -13,6 +16,8 @@
     do {                                                                       \
         cudaError_t err = cudaSetDevice(deviceId);                             \
         if (err != cudaSuccess) {                                              \
+            std::cerr << "Cuda set device " << deviceId << "error: " << err    \
+                      << " in function " << __func__ << std::endl;             \
             return INFINIRT_STATUS_BAD_DEVICE;                                 \
         }                                                                      \
     } while (0)

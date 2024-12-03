@@ -1,11 +1,15 @@
 #include "infinirt_ascend.h"
 #include <acl/acl.h>
+#include <iostream>
 #include <mutex>
 
 #define ACL_CALL(x)                                                            \
     do {                                                                       \
         aclError err = (x);                                                    \
         if (err != ACL_SUCCESS) {                                              \
+            std::cerr << "ACL Error: " << err << " in function " << __func__   \
+                      << std::endl;                                            \
+            std::cerr << aclGetRecentErrMsg() << std::endl;                    \
             return INFINIRT_STATUS_EXECUTION_FAILED;                           \
         }                                                                      \
     } while (0)
@@ -14,6 +18,9 @@
     do {                                                                       \
         aclError err = aclrtSetDevice(deviceId);                               \
         if (err != ACL_SUCCESS) {                                              \
+            std::cerr << "ACL set device " << deviceId << " Error: " << err    \
+                      << " in function " << __func__ << std::endl;             \
+            std::cerr << aclGetRecentErrMsg() << std::endl;                    \
             return INFINIRT_STATUS_BAD_DEVICE;                                 \
         }                                                                      \
     } while (0)
