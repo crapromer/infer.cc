@@ -96,6 +96,20 @@ __C infinirtStatus_t infinirtGetRawStream(void **ptr, infinirtStream_t stream) {
     return INFINIRT_STATUS_SUCCESS;
 }
 
+__C infinirtStatus_t infinirtGetStreamDeviceInfo(int *deviceType,
+                                                 uint32_t *deviceId,
+                                                 infinirtStream_t stream) {
+    if (stream == nullptr)
+        return INFINIRT_STATUS_INVALID_ARGUMENT;
+    if (deviceType != nullptr) {
+        *deviceType = stream->device;
+    }
+    if (deviceId != nullptr) {
+        *deviceId = stream->device_id;
+    }
+    return INFINIRT_STATUS_SUCCESS;
+}
+
 // Event
 __C infinirtStatus_t infinirtEventCreate(infinirtEvent_t *pEvent, DeviceType device, uint32_t deviceId)
 {
@@ -237,6 +251,20 @@ __C infinirtStatus_t infinirtMallocAsync(void **pMemory, DeviceType device,
     }
 }
 
+__C __export infinirtStatus_t infinirtMallocHost(void **pMemory,
+                                                 DeviceType device,
+                                                 uint32_t deviceId,
+                                                 size_t size) {
+    switch (device) {
+    case DEVICE_CPU:
+        return infinirtMalloc(pMemory, device, deviceId, size);
+    case DEVICE_NVIDIA:
+        return mallocHostCuda(pMemory, deviceId, size);
+    default:
+        return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
+    }
+}
+
 __C infinirtStatus_t infinirtFree(void *ptr, DeviceType device,
                                   uint32_t deviceId) {
     if (ptr == nullptr)
@@ -271,6 +299,20 @@ __C infinirtStatus_t infinirtFreeAsync(void *ptr, DeviceType device,
         return freeCudaAsync(ptr, deviceId, stream);
     case DEVICE_ASCEND:
         return freeAscendAsync(ptr, deviceId, stream);
+    default:
+        return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
+    }
+}
+
+__C __export infinirtStatus_t infinirtFreeHost(void *ptr, DeviceType device,
+                                               uint32_t deviceId) {
+    if (ptr == nullptr)
+        return INFINIRT_STATUS_SUCCESS;
+    switch (device) {
+    case DEVICE_CPU:
+        return infinirtFree(ptr, device, deviceId);
+    case DEVICE_NVIDIA:
+        return freeHostCuda(ptr, deviceId);
     default:
         return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
     }
@@ -336,6 +378,24 @@ __C infinirtStatus_t infinirtMemcpyD2H(void *dst, const void *src,
     }
 }
 
+__C __export infinirtStatus_t infinirtMemcpy(void *dst, const void *src,
+                                             DeviceType device,
+                                             uint32_t deviceId, size_t size) {
+    if (size == 0)
+        return INFINIRT_STATUS_SUCCESS;
+    if (dst == nullptr || src == nullptr)
+        return INFINIRT_STATUS_INVALID_ARGUMENT;
+    switch (device) {
+    case DEVICE_CPU:
+        memcpy(dst, src, size);
+        return INFINIRT_STATUS_SUCCESS;
+    case DEVICE_NVIDIA:
+        return memcpyCuda(dst, src, deviceId, size);
+    default:
+        return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
+    }
+}
+
 __C __export infinirtStatus_t infinirtMemcpyAsync(void *dst, const void *src,
                                                   DeviceType device,
                                                   uint32_t deviceId,
@@ -351,8 +411,7 @@ __C __export infinirtStatus_t infinirtMemcpyAsync(void *dst, const void *src,
 
     switch (device) {
     case DEVICE_CPU:
-        memcpy(dst, src, size);
-        return INFINIRT_STATUS_SUCCESS;
+        return infinirtMemcpy(dst, src, device, deviceId, size);
     case DEVICE_NVIDIA:
         return memcpyCudaAsync(dst, src, deviceId, size, stream);
     case DEVICE_ASCEND:

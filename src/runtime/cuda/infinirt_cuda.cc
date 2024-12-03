@@ -116,6 +116,15 @@ infinirtStatus_t mallocCudaAsync(void **pMemory, uint32_t deviceId, size_t size,
     return INFINIRT_STATUS_SUCCESS;
 }
 
+infinirtStatus_t mallocHostCuda(void **pMemory, uint32_t deviceId,
+                                size_t size) {
+    SWITCH_DEVICE(deviceId);
+    void *host_ptr;
+    CUDA_CALL(cudaMallocHost(&host_ptr, size));
+    *pMemory = host_ptr;
+    return INFINIRT_STATUS_SUCCESS;
+}
+
 infinirtStatus_t freeCuda(void *ptr, uint32_t deviceId) {
     SWITCH_DEVICE(deviceId);
     CUDA_CALL(cudaFree(ptr));
@@ -126,6 +135,12 @@ infinirtStatus_t freeCudaAsync(void *ptr, uint32_t deviceId,
                                infinirtStream_t stream) {
     SWITCH_DEVICE(deviceId);
     CUDA_CALL(cudaFreeAsync(ptr, getCudaStream(stream)));
+    return INFINIRT_STATUS_SUCCESS;
+}
+
+infinirtStatus_t freeHostCuda(void *ptr, uint32_t deviceId) {
+    SWITCH_DEVICE(deviceId);
+    CUDA_CALL(cudaFreeHost(ptr));
     return INFINIRT_STATUS_SUCCESS;
 }
 
@@ -149,6 +164,13 @@ infinirtStatus_t memcpyCuda2Host(void *dst, const void *src, uint32_t deviceId,
                                  size_t size) {
     SWITCH_DEVICE(deviceId);
     CUDA_CALL(cudaMemcpy(dst, src, size, cudaMemcpyDeviceToHost));
+    return INFINIRT_STATUS_SUCCESS;
+}
+
+infinirtStatus_t memcpyCuda(void *dst, const void *src, uint32_t deviceId,
+                            size_t size) {
+    SWITCH_DEVICE(deviceId);
+    CUDA_CALL(cudaMemcpy(dst, src, size, cudaMemcpyDeviceToDevice));
     return INFINIRT_STATUS_SUCCESS;
 }
 
