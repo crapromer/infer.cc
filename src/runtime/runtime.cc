@@ -96,7 +96,7 @@ __C infinirtStatus_t infinirtGetRawStream(void **ptr, infinirtStream_t stream) {
     return INFINIRT_STATUS_SUCCESS;
 }
 
-__C infinirtStatus_t infinirtGetStreamDeviceInfo(int *deviceType,
+__C infinirtStatus_t infinirtGetStreamDeviceInfo(DeviceType *deviceType,
                                                  uint32_t *deviceId,
                                                  infinirtStream_t stream) {
     if (stream == nullptr)

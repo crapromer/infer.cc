@@ -50,7 +50,7 @@ __C __export infinirtStatus_t infinirtStreamCreate(infinirtStream_t *pStream, De
 __C __export infinirtStatus_t infinirtStreamDestroy(infinirtStream_t stream);
 __C __export infinirtStatus_t infinirtStreamSynchronize(infinirtStream_t stream);
 __C __export infinirtStatus_t infinirtGetRawStream(void** ptr, infinirtStream_t stream);
-__C __export infinirtStatus_t infinirtGetStreamDeviceInfo(int* deviceType, uint32_t *deviceId, infinirtStream_t stream);
+__C __export infinirtStatus_t infinirtGetStreamDeviceInfo(DeviceType* deviceType, uint32_t *deviceId, infinirtStream_t stream);
 
 // Event
 struct infinirtEvent;
