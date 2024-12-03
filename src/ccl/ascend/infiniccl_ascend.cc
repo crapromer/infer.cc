@@ -2,12 +2,14 @@
 #include "../../runtime/runtime.h"
 #include <acl/acl.h>
 #include <hccl.h>
+#include <iostream>
 #include <vector>
 
 #define HCCL_CALL(x)                                                           \
     do {                                                                       \
         HcclResult err = (x);                                                  \
         if (err != HCCL_SUCCESS) {                                             \
+            printf("HCCL Error: %d\n", err);                                   \
             return INFINICCL_STATUS_EXECUTION_FAILED;                          \
         }                                                                      \
     } while (0)
@@ -16,7 +18,8 @@
     do {                                                                       \
         aclError err = aclrtSetDevice(deviceId);                               \
         if (err != ACL_SUCCESS) {                                              \
-            return INFINIRT_STATUS_BAD_DEVICE;                                 \
+            printf("aclrtSetDevice Error: %d\n", err);                         \
+            return INFINICCL_STATUS_BAD_DEVICE;                                \
         }                                                                      \
     } while (0)
 
@@ -46,6 +49,10 @@ infinicclStatus_t infinicclAscendCommInitAll(infinicclComm_t *comms,
                                              unsigned int numDevices,
                                              unsigned int const *deviceIDs) {
     std::vector<HcclComm> hcclComms(numDevices);
+    // Ascend requires all devices to be initialized before calling HcclCommInitAll.
+    for (unsigned int i = 0; i < numDevices; i++) {
+        SWITCH_DEVICE(deviceIDs[i]);
+    }
     HCCL_CALL(
         HcclCommInitAll(numDevices, (int32_t *)deviceIDs, hcclComms.data()));
     for (unsigned int i = 0; i < numDevices; i++) {
@@ -69,5 +76,7 @@ infinicclStatus_t infinicclAscendAllReduceSum(infinicclComm_t comm,
     HCCL_CALL(HcclAllReduce(sendbuf, recvbuf, (uint64_t)count,
                             getAscneDtype(datatype), HCCL_REDUCE_SUM,
                             getHcclComm(comm), getAscendStream(stream)));
+    // Somehow program will hang here if stream is not synchronized.
+    infinirtStreamSynchronize(stream);
     return INFINICCL_STATUS_SUCCESS;
 }

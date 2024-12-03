@@ -277,9 +277,12 @@ def main():
         ndev,
         dev_ids,
     )
+    
+    input_content = "Once upon a time,"
 
+    print(input_content)
     kv_cache = lib.create_kv_cache(model_instance)
-    tokens = tokenizer.encode("Once upon a time,")
+    tokens = tokenizer.encode(input_content)
     ntok = len(tokens)
     nreq = 1
 

@@ -55,7 +55,7 @@ int test_allreduce_sum(DeviceType deviceType) {
         deviceIds[i] = (uint32_t)i;
     }
 
-    infinicclCommInitAll(deviceType, comm, TEST_GROUP_SIZE, deviceIds.data());
+    CHECK_RUN(infinicclCommInitAll(deviceType, comm, TEST_GROUP_SIZE, deviceIds.data()));
 
     for (int i = 0; i < TEST_GROUP_SIZE; i++) {
         threads[i] = std::thread(allreduce_sum, deviceType, deviceIds[i], comm[i], std::ref(data),
