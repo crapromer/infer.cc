@@ -46,8 +46,13 @@ if is_mode("debug") then
     add_defines("DEBUG_MODE")
 end
 
+local infini_root = os.getenv("INFINI_ROOT")
+if infini_root == nil then
+    infini_root = os.getenv("HOME") .. "/.infini"
+end
+
 if has_config("infer") then
-    add_includedirs(os.getenv("INFINI_ROOT") .. "/lib/include")
+    add_includedirs(infini_root .. "/include")
 end
 
 if has_config("nv-gpu") then
@@ -131,14 +136,26 @@ target("infinirt")
     set_languages("cxx17")
     add_files("src/runtime/runtime.cc")
     on_install(function (target)
-        os.cp(target:targetfile(), os.getenv("INFINI_ROOT") .. "/lib/libinfinirt.so")
+        local GREEN = '\27[0;32m'
+        local YELLOW = '\27[1;33m'
+        local NC = '\27[0m'  -- No Color
+        if os.isdir(infini_root) then
+            print("INFINI_ROOT detected, duplicated contents will be overwritten during installation.")
+        end
+        os.mkdir(infini_root .. "/lib")
+        os.mkdir(infini_root .. "/include")
+        os.exec("echo -e '" .. YELLOW .. "To set the environment variables, you can run the following command:" .. NC .. "'")
+        os.exec("echo -e '" .. YELLOW .. "export INFINI_ROOT=" .. infini_root .. NC .. "'")
+        os.exec("echo -e '" .. YELLOW .. "export LD_LIBRARY_PATH=:$INFINI_ROOT/lib:$LD_LIBRARY_PATH" .. NC .. "'")
+        os.cp(target:targetfile(), infini_root .. "/lib/libinfinirt.so")
+        os.cp("$(projectdir)/include/infinirt.h", infini_root .. "/include/infinirt.h")
     end)
 target_end()
 
 if has_config("ccl") then
 target("infiniccl")
     set_kind("shared")
-
+    add_deps("infinirt")
     if has_config("nv-gpu") then
         add_deps("nv-gpu")
     end
@@ -148,7 +165,8 @@ target("infiniccl")
     set_languages("cxx17")
     add_files("src/ccl/infiniccl.cc")
     on_install(function (target)
-        os.cp(target:targetfile(), os.getenv("INFINI_ROOT") .. "/lib/libinfiniccl.so")
+        os.cp(target:targetfile(), infini_root .. "/lib/libinfiniccl.so")
+        os.cp("$(projectdir)/include/infiniccl.h", infini_root .. "/include/infiniccl.h")
     end)
 target_end()
 end
@@ -158,13 +176,14 @@ target("infiniinfer")
     set_kind("shared")
     add_deps("infinirt")
     add_deps("infiniccl")
-    add_links(os.getenv("INFINI_ROOT") .. "/lib/libinfiniop.so")
+    add_links(infini_root .. "/lib/libinfiniop.so")
     set_languages("cxx17")
     add_files("src/models/*.cc")
     add_files("src/tensor/*.cc")
     add_includedirs("src")
     on_install(function (target)
-        os.cp(target:targetfile(), os.getenv("INFINI_ROOT") .. "/lib/libinfiniinfer.so")
+        os.cp(target:targetfile(), infini_root .. "/lib/libinfiniinfer.so")
+        os.cp("$(projectdir)/include/infini_infer.h", infini_root .. "/include/infini_infer.h")
     end)
 target_end()
 end
@@ -192,7 +211,7 @@ target("infini_infer_test")
     end
 
     add_files("src/models/*.cc")
-    add_links(os.getenv("INFINI_ROOT") .. "/lib/libinfiniop.so")
+    add_links(infini_root .. "/lib/libinfiniop.so")
     add_files("src/tensor/*.cc")
     add_cxflags("-lstdc++ -Wall -fPIC")
 
