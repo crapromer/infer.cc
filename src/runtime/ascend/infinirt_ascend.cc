@@ -30,7 +30,7 @@ std::once_flag acl_init_flag;
 infinirtStatus_t initAscend(){
     aclError _err = ACL_SUCCESS;
     std::call_once(acl_init_flag, [&_err]() {
-        _err = aclInit(nullptr);
+        _err = aclInit(NULL);
     });
     ACL_CALL(_err);
     return INFINIRT_STATUS_SUCCESS;
