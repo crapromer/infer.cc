@@ -94,7 +94,10 @@ infinirtStatus_t recordCudaEvent(infinirtEvent_t event,
 
 infinirtStatus_t queryCudaEvent(infinirtEvent_t event) {
     SWITCH_DEVICE(event->device_id);
-    CUDA_CALL(cudaEventQuery(static_cast<cudaEvent_t>(event->event)));
+    cudaError_t err = cudaEventQuery(static_cast<cudaEvent_t>(event->event));
+    if (err != cudaSuccess){
+        return INFINIRT_STATUS_NOT_READY;
+    }
     return INFINIRT_STATUS_SUCCESS;
 }
 
