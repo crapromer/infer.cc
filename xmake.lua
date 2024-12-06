@@ -48,7 +48,7 @@ end
 
 local infini_root = os.getenv("INFINI_ROOT")
 if infini_root == nil then
-    infini_root = os.getenv("HOME") .. "/.infini"
+    infini_root = os.getenv(is_host("windows") and "HOMEPATH" or "HOME") .. "/.infini"
 end
 
 if has_config("infer") then
@@ -144,9 +144,11 @@ target("infinirt")
         end
         os.mkdir(infini_root .. "/lib")
         os.mkdir(infini_root .. "/include")
-        os.exec("echo -e '" .. YELLOW .. "To set the environment variables, you can run the following command:" .. NC .. "'")
-        os.exec("echo -e '" .. YELLOW .. "export INFINI_ROOT=" .. infini_root .. NC .. "'")
-        os.exec("echo -e '" .. YELLOW .. "export LD_LIBRARY_PATH=:$INFINI_ROOT/lib:$LD_LIBRARY_PATH" .. NC .. "'")
+        if not is_host("windows") then
+            print(YELLOW .. "To set the environment variables, you can run the following command:" .. NC)
+            print(YELLOW .. "export INFINI_ROOT=" .. infini_root .. NC)
+            print(YELLOW .. "export LD_LIBRARY_PATH=:$INFINI_ROOT/lib:$LD_LIBRARY_PATH" .. NC)
+        end
         os.cp(target:targetfile(), infini_root .. "/lib/libinfinirt.so")
         os.cp("$(projectdir)/include/infinirt.h", infini_root .. "/include/infinirt.h")
     end)
