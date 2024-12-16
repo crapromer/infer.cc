@@ -1,0 +1,490 @@
+import ctypes
+from ctypes import c_void_p, c_uint, POINTER, c_float
+import io
+import sys
+import os
+import re
+from typing import IO, Dict, List
+from pytrie import StringTrie
+import json
+
+if len(sys.argv) < 3:
+    print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
+    sys.exit(1)
+model_path =  sys.argv[2]
+if not os.path.isdir(model_path):
+    print(f"Model directory {model_path} does not exist")
+    sys.exit(1)
+model_file = ""
+config_file = os.path.join(model_path, "config.json")
+vocab_file = os.path.join(model_path, "vocab.txt")
+for file_name in os.listdir(model_path):
+    if file_name.endswith(".pt"):
+        model_file = os.path.join(model_path, file_name)
+
+
+lib_path = os.path.join(os.environ.get("INFINI_ROOT"), "lib", "libinfiniinfer.so")
+lib = ctypes.CDLL(lib_path)
+
+
+class DataType(ctypes.c_int):
+    INFINI_BYTE = 0
+    INFINI_I8 = 1
+    INFINI_I16 = 2
+    INFINI_I32 = 3
+    INFINI_I64 = 4
+    INFINI_U8 = 5
+    INFINI_U16 = 6
+    INFINI_U32 = 7
+    INFINI_U64 = 8
+    INFINI_F8 = 9
+    INFINI_F16 = 10
+    INFINI_F32 = 11
+    INFINI_F64 = 12
+    INFINI_BF16 = 13
+    INFINI_BOOL = 14
+
+
+class DeviceType(ctypes.c_int):
+    DEVICE_TYPE_CPU = 0
+    DEVICE_TYPE_CUDA = 1
+    DEVICE_TYPE_CAMBRICON = 2
+    DEVICE_TYPE_ASCEND = 3
+
+device_type = DeviceType.DEVICE_TYPE_CPU
+if sys.argv[1] == "--cpu":
+    device_type = DeviceType.DEVICE_TYPE_CPU
+elif sys.argv[1] == "--cuda":
+    device_type = DeviceType.DEVICE_TYPE_CUDA
+elif sys.argv[1] == "--cambricon":
+    device_type = DeviceType.DEVICE_TYPE_CAMBRICON
+elif sys.argv[1] == "--ascend":
+    device_type = DeviceType.DEVICE_TYPE_ASCEND
+else:
+    print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
+    sys.exit(1)
+
+
+class LlamaMeta(ctypes.Structure):
+    _fields_ = [
+        ("dt_logits", DataType),
+        ("dt_norm", DataType),
+        ("dt_mat", DataType),
+        ("nlayer", c_uint),
+        ("d", c_uint),
+        ("nh", c_uint),
+        ("nkvh", c_uint),
+        ("dh", c_uint),
+        ("di", c_uint),
+        ("dctx", c_uint),
+        ("dvoc", c_uint),
+        ("epsilon", c_float),
+        ("theta", c_float),
+    ]
+
+
+# Define the LlamaWeights struct
+class LlamaWeights(ctypes.Structure):
+    _fields_ = [
+        ("nlayer", c_uint),
+        ("input_embd", c_void_p),
+        ("output_norm", c_void_p),
+        ("output_embd", c_void_p),
+        ("attn_norm", POINTER(c_void_p)),
+        ("attn_qkv", POINTER(c_void_p)),
+        ("attn_o", POINTER(c_void_p)),
+        ("ffn_norm", POINTER(c_void_p)),
+        ("ffn_gate_up", POINTER(c_void_p)),
+        ("ffn_down", POINTER(c_void_p)),
+    ]
+
+    def __init__(self, state_dict, meta, ndev=1):
+        import torch
+
+        self.nlayer = meta.nlayer
+        self.input_embd = state_dict["input_embedding.weight"].data_ptr()
+        self.output_norm = state_dict["encoder.output_layernorm.weight"].data_ptr()
+        self.output_embd = state_dict["lm_head.weight"].data_ptr()
+        self.attn_norm = (c_void_p * self.nlayer)(
+            *[
+                state_dict[f"encoder.layers.{i}.self_att.layernorm_before_attention.weight"].data_ptr()
+                for i in range(self.nlayer)
+            ]
+        )
+        nh = meta.nh
+        nkvh = meta.nkvh
+        dh = meta.dh
+        d = meta.d
+        di = meta.di
+        assert nh % nkvh == 0
+        assert nh % ndev == 0
+        assert nkvh % ndev == 0
+        assert di % ndev == 0
+        def qkv_slices(_i):
+            _Q = state_dict[f"encoder.layers.{_i}.self_att.self_attention.project_q.weight"].reshape([nh, 2, dh // 2, d]).transpose(1, 2)
+            _K = state_dict[f"encoder.layers.{_i}.self_att.self_attention.project_k.weight"].reshape([nkvh, 2, dh // 2, d]).transpose(1, 2)
+            _V = state_dict[f"encoder.layers.{_i}.self_att.self_attention.project_v.weight"].reshape([nkvh, dh // 2, 2, d])
+            _result = []
+            _nh = nh // ndev
+            _nkvh = nkvh // ndev
+            for _idev in range(ndev):
+                _result.append(
+                    _Q[_idev * _nh:(_idev + 1) * _nh, :, :, :]
+                )
+                _result.append(
+                    _K[_idev * _nkvh : (_idev + 1) * _nkvh, :, :, :]
+                )
+                _result.append(
+                    _V[_idev * _nkvh : (_idev + 1) * _nkvh, :, :]
+                )
+            return _result
+        self.qkv_tensor = [
+            torch.concat(
+                qkv_slices(i)
+            )
+            for i in range(self.nlayer)
+        ]
+        self.attn_qkv = (c_void_p * self.nlayer)(
+            *[self.qkv_tensor[i].data_ptr() for i in range(self.nlayer)]
+        )
+        self.attn_o_tensor = [
+            state_dict[f"encoder.layers.{i}.self_att.self_attention.attention_out.weight"]
+            .reshape([d, ndev, nh//ndev * dh])
+            .transpose(0, 1)
+            .contiguous()
+            for i in range(self.nlayer)
+        ]
+        self.attn_o = (c_void_p * self.nlayer)(
+            *[
+                self.attn_o_tensor[i].data_ptr()
+                for i in range(self.nlayer)
+            ]
+        )
+        self.ffn_norm = (c_void_p * self.nlayer)(
+            *[
+                state_dict[
+                    f"encoder.layers.{i}.ffn.layernorm_before_ffn.weight"
+                ].data_ptr()
+                for i in range(self.nlayer)
+            ]
+        )
+        def gate_up_slices(_i):
+            _result = []
+            _di = di // ndev
+            for _idev in range(ndev):
+                _start = _idev * _di
+                _end = (_idev + 1) * _di
+                _result.append(
+                    state_dict[f"encoder.layers.{_i}.ffn.ffn.w_in.w_0.weight"][_start:_end, :]
+                )
+                _result.append(
+                    state_dict[f"encoder.layers.{_i}.ffn.ffn.w_in.w_1.weight"][_start:_end, :]
+                )
+            return _result
+        
+        self.gate_up_tensor = [
+            torch.concat(
+                gate_up_slices(i)
+            )
+            for i in range(self.nlayer)
+        ]
+
+        self.ffn_gate_up = (c_void_p * self.nlayer)(
+            *[self.gate_up_tensor[i].data_ptr() for i in range(self.nlayer)]
+        )
+        
+        self.ffn_down_tensor = [
+            state_dict[f"encoder.layers.{i}.ffn.ffn.w_out.weight"]
+            .reshape([d, ndev, di//ndev])
+            .transpose(0, 1)
+            .contiguous()
+            for i in range(self.nlayer)
+        ]
+        self.ffn_down = (c_void_p * self.nlayer)(
+            *[
+                self.ffn_down_tensor[i].data_ptr()
+                for i in range(self.nlayer)
+            ]
+        )
+
+
+class Model(ctypes.Structure):
+    pass
+
+
+class KVCache(ctypes.Structure):
+    pass
+
+
+lib.create_model.restype = POINTER(Model)
+lib.create_model.argtypes = [
+    POINTER(LlamaMeta),  # LlamaMeta const *
+    POINTER(LlamaWeights),  # LlamaWeights const *
+    DeviceType,  # DeviceType
+    c_uint,  # unsigned int ndev
+    POINTER(c_uint),  # unsigned int const *dev_ids
+]
+
+lib.create_kv_cache.restype = POINTER(KVCache)
+
+lib.infer.restype = None
+lib.infer.argtypes = [
+    ctypes.POINTER(Model),  # struct Model const *
+    c_uint,  # unsigned int ntok
+    POINTER(c_uint),  # unsigned int const *tokens
+    c_uint,  # unsigned int nreq
+    POINTER(c_uint),  # unsigned int const *req_lens
+    POINTER(c_uint),  # unsigned int const *req_pos
+    POINTER(POINTER(KVCache)),  # struct KVCache **kv_caches
+    POINTER(c_uint),  # unsigned int *ans
+    c_float,  # float temperature
+    c_uint,  # unsigned int topk
+    c_float,  # float topp
+]
+
+def load_vocab(fp: IO[bytes]) -> Dict[str, int]:
+    """Loads a vocabulary file into a dictionary."""
+    vocab: Dict[str, int] = {}
+
+    reader = io.TextIOWrapper(fp, encoding="utf-8")
+    for token in reader.readlines():
+        token = token.strip()
+        if len(token) == 0:
+            continue
+        token = json.loads(token)
+        vocab[token] = len(vocab)
+    return vocab
+
+class CPM9GTokenizer(object):
+    def __init__(self, path):
+        self.unk_token = "<unk>"
+        self.bos_token = "<s>"
+        self.eos_token = "</s>"
+        self.byte_list = ["<0x0{}>".format(hex(i).upper()[2:]) for i in range(0x10)] + [
+            "<0x{}>".format(hex(i).upper()[2:]) for i in range(0x10, 0x100)
+        ]
+
+        self._special_token_set = set([self.unk_token, self.bos_token, self.eos_token] + self.byte_list)
+
+        all_tokens = load_vocab(io.FileIO(path, "rb"))
+
+        self.encoder: Dict[str, int] = {}
+        self._special_encoder: Dict[str, int] = {}
+        for token, token_id in all_tokens.items():
+            if token in self._special_token_set:
+                self._special_encoder[token] = token_id
+            else:
+                self.encoder[token] = token_id
+
+        self.decoder = {v: k for k, v in self.encoder.items()}
+        self._byte_decoder = {self._special_encoder[token]: i for i, token in enumerate(self.byte_list)}
+
+        self._max_word_len = max([len(x) for x in self.encoder.keys()])
+
+        self._len_word_first = {}
+        for x in self.encoder.keys():
+            if not x[0] in self._len_word_first:
+                self._len_word_first[x[0]] = 1
+            if len(x) > self._len_word_first[x[0]]:
+                self._len_word_first[x[0]] = len(x)
+        self.tencoder = StringTrie(self.encoder)
+
+    def get_piece(self, text: str) -> str:
+        if text[0] in self._len_word_first:
+            text = text[: self._len_word_first[text[0]]]
+            len_text = len(text)
+            for i in range(len(text)):
+                sub = text[: len_text - i]
+                if sub in self.encoder:
+                    return sub
+        return text[0]
+
+    @property
+    def vocab_size(self):
+        return len(self)
+
+    @property
+    def eos_id(self):
+        return self._special_encoder[self.eos_token]
+
+    @property
+    def bos_id(self):
+        return self._special_encoder[self.bos_token]
+
+    @property
+    def unk_id(self):
+        return self._special_encoder[self.unk_token]
+
+    def __len__(self):
+        return len(self.encoder) + len(self._special_encoder)
+
+    def tokenize(self, text: str) -> List[str]:
+        output_tokens: List[str] = []
+        st = 0
+        while st < len(text):
+            piece = self.get_piece(text[st:])
+            output_tokens.append(piece)
+            st += len(piece)
+        return output_tokens
+
+    @staticmethod
+    def escape(text: str) -> str:
+        return text
+
+    @staticmethod
+    def unescape(text: str) -> str:
+        return text
+
+    def encode(self, text: str, with_bos = True) -> List[int]:
+        ret = []
+        if with_bos:
+            ret.append(self.bos_id)
+        for x in self.tokenize(text):
+            if x in self.encoder:
+                ret.append(self.encoder[x])
+            else:
+                ret.extend(self._encode_unicode(x))
+        return ret
+
+    def decode(self, tokens: List[int]):
+        """Decode ids into a string."""
+        ret = []
+        st = 0
+
+        while st < len(tokens):
+            if tokens[st] in self.decoder:
+                ret.append(self.decoder[tokens[st]])
+                st += 1
+            elif tokens[st] in self._byte_decoder:
+                first = self._byte_decoder[tokens[st]]
+                length = 1 if first < 128 else len(re.search('^1+0', bin(first)[2:])[0])-1
+                code = 0
+                try:
+                    for j in range(length):
+                        code = code << 8 | self._byte_decoder[tokens[st + j]]
+                    code = int.to_bytes(code, length, "big").decode("utf-8")
+                    ret.append(code)
+                except:
+                    pass
+                st = st + length
+            elif tokens[st] == self.eos_id:
+                ret.append(self.eos_token)
+                st += 1
+            elif tokens[st] == self.bos_id:
+                ret.append(self.bos_token)
+                st += 1
+            else:
+                ret.append(self.unk_token)
+                st += 1
+        return "".join(ret)
+
+    def _encode_unicode(self, token):
+        # wrap unicode encoding into a helper function
+        ids = []
+        utf8_id = token.encode("utf-8")
+        for _id in utf8_id:
+            ids.append(self._special_encoder[self.byte_list[_id]])
+        return ids
+
+    def next_token(self, text):
+        # fast next token matching
+        token, token_id = self.tencoder.longest_prefix_item(text, (None, None))
+        if token is None:
+            token = text[0]
+            token_ids = self._encode_unicode(token)
+        else:
+            token_ids = [token_id]
+        return token, token_ids
+
+def main():
+    ndev = int(sys.argv[3]) if len(sys.argv) > 3 else 1
+    dev_ids = (c_uint * ndev)(*[i for i in range(ndev)])
+
+    import torch
+
+    import time
+
+    state_dict = torch.load(model_file, weights_only=True)
+    tokenizer = CPM9GTokenizer(vocab_file)
+    config = json.load(open(config_file))
+
+    temperature = 1.0
+    topk = 50
+    topp = 1.0
+
+    meta = LlamaMeta(
+        dt_logits=DataType.INFINI_F16,
+        dt_norm=DataType.INFINI_F16,
+        dt_mat=DataType.INFINI_F16,
+        nlayer=config["num_layers"],
+        d=config["dim_model"],
+        nh=config["num_heads"],
+        nkvh=config["num_kv_heads"],
+        dh=config["dim_head"],
+        di=config["dim_ff"],
+        dctx=4096,
+        dvoc=config["vocab_size"],
+        epsilon=config["eps"],
+        theta=10000.0,
+    )
+
+    weights = LlamaWeights(state_dict, meta, ndev)
+
+    model_instance = lib.create_model(
+        ctypes.byref(meta),
+        ctypes.byref(weights),
+        device_type,
+        ndev,
+        dev_ids,
+    )
+    
+    input_content = "<用户>Once upon a time, <AI>"
+
+    print(input_content, end="", flush=True)
+    kv_cache = lib.create_kv_cache(model_instance)
+    tokens = tokenizer.encode(input_content)
+    ntok = len(tokens)
+    nreq = 1
+
+    tokens = (c_uint * ntok)(*tokens)
+    req_lens = (c_uint * nreq)(*[ntok])
+    req_pos = (c_uint * nreq)(*[0])
+    kv_caches = (POINTER(KVCache) * nreq)(*[kv_cache])
+    ans = (c_uint * nreq)()
+
+    max_steps = 500
+    steps = 0
+    start_time = time.time()
+    for _step in range(max_steps):
+        lib.infer(
+            model_instance,
+            ntok,
+            tokens,
+            nreq,
+            req_lens,
+            req_pos,
+            kv_caches,
+            ans,
+            temperature,
+            topk,
+            topp,
+        )
+        steps += 1
+        
+        output_tokens = list(ans)
+        output_str = tokenizer.decode(output_tokens)
+        if output_str.endswith("</s>"):
+            break
+        print(output_str, end="", flush=True)
+        req_pos[0] = req_pos[0] + ntok
+        ntok = 1
+        tokens = (c_uint * ntok)(*output_tokens)
+        req_lens = (c_uint * nreq)(*[ntok])
+        
+    print("\n")
+    end_time = time.time()
+    print(f"Time per step: {(end_time - start_time) *  1000 / steps:.3f}ms")
+
+
+if __name__ == '__main__':
+    main()
