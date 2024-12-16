@@ -7,6 +7,7 @@ import re
 from typing import IO, Dict, List
 from pytrie import StringTrie
 import json
+import torch
 
 if len(sys.argv) < 3:
     print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
@@ -19,7 +20,7 @@ model_file = ""
 config_file = os.path.join(model_path, "config.json")
 vocab_file = os.path.join(model_path, "vocab.txt")
 for file_name in os.listdir(model_path):
-    if file_name.endswith(".pt"):
+    if file_name.endswith(".ckpt") or file_name.endswith(".pt"):
         model_file = os.path.join(model_path, file_name)
 
 
@@ -99,8 +100,6 @@ class LlamaWeights(ctypes.Structure):
     ]
 
     def __init__(self, state_dict, meta, ndev=1):
-        import torch
-
         self.nlayer = meta.nlayer
         self.input_embd = state_dict["input_embedding.weight"].data_ptr()
         self.output_norm = state_dict["encoder.output_layernorm.weight"].data_ptr()
@@ -207,7 +206,54 @@ class LlamaWeights(ctypes.Structure):
             ]
         )
 
+    
 
+def load_ckpt(ckpt_file_path):
+    import struct
+    def _load_dtype(fp):
+        dtype = struct.unpack("B", fp.read(1))[0]
+        return dtype
+
+    def _load_string(fp):
+        size = struct.unpack("I", fp.read(4))[0]
+        return fp.read(size).decode("utf-8")
+
+    def _load_tuple(fp):
+        ndim = struct.unpack("B", fp.read(1))[0]
+        ret = []
+        for _ in range(ndim):
+            ret.append(struct.unpack("I", fp.read(4))[0])
+        return tuple(ret)
+    
+    ckpt = {}
+    _nlayer = 0
+    with open(ckpt_file_path, "rb") as fp:
+        num_parameters = struct.unpack("I", fp.read(4))[0]
+        _nlayer = (num_parameters - 3) // 9
+        for _ in range(num_parameters):
+            param_name = _load_string(fp)
+            _shape = _load_tuple(fp)
+            param_size = struct.unpack("I", fp.read(4))[0]
+            _ = _load_dtype(fp)
+            param = bytearray(fp.read(param_size))
+            
+            ckpt[param_name] = torch.frombuffer(param, dtype=torch.float16, count=int(param_size)//2).reshape(_shape)
+    state_dict = {}
+    state_dict["input_embedding.weight"] = ckpt["input_embedding.weight"].cuda()
+    state_dict["lm_head.weight"] = ckpt["lm_head.weight"]
+    state_dict["encoder.output_layernorm.weight"] = ckpt["output_layernorm.weight"]
+    for i in range(_nlayer):
+        state_dict[f"encoder.layers.{i}.self_att.layernorm_before_attention.weight"] = ckpt[f"layers.{i}.ln_attn.weight"]
+        state_dict[f"encoder.layers.{i}.self_att.self_attention.project_q.weight"] = ckpt[f"layers.{i}.attn.project_q.weight"]
+        state_dict[f"encoder.layers.{i}.self_att.self_attention.project_k.weight"] = ckpt[f"layers.{i}.attn.project_k.weight"]
+        state_dict[f"encoder.layers.{i}.self_att.self_attention.project_v.weight"] = ckpt[f"layers.{i}.attn.project_v.weight"]
+        state_dict[f"encoder.layers.{i}.self_att.self_attention.attention_out.weight"] = ckpt[f"layers.{i}.attn.attn_out.weight"]
+        state_dict[f"encoder.layers.{i}.ffn.layernorm_before_ffn.weight"] = ckpt[f"layers.{i}.ln_ff.weight"]
+        state_dict[f"encoder.layers.{i}.ffn.ffn.w_in.w_0.weight"] = ckpt[f"layers.{i}.ff.w_in.weight"]
+        state_dict[f"encoder.layers.{i}.ffn.ffn.w_in.w_1.weight"] = ckpt[f"layers.{i}.ff.w_gated.weight"]
+        state_dict[f"encoder.layers.{i}.ffn.ffn.w_out.weight"] = ckpt[f"layers.{i}.ff.w_out.weight"]
+    return state_dict
+            
 class Model(ctypes.Structure):
     pass
 
@@ -400,11 +446,14 @@ def main():
     ndev = int(sys.argv[3]) if len(sys.argv) > 3 else 1
     dev_ids = (c_uint * ndev)(*[i for i in range(ndev)])
 
-    import torch
-
     import time
-
-    state_dict = torch.load(model_file, weights_only=True)
+    state_dict = {}
+    if model_file.endswith(".pt"):
+        state_dict = torch.load(model_file, weights_only=True)
+    elif model_file.endswith(".ckpt"):
+        state_dict = load_ckpt(model_file)
+    else:
+        raise ValueError("Unsupported model file format")
     tokenizer = CPM9GTokenizer(vocab_file)
     config = json.load(open(config_file))
 
@@ -427,7 +476,6 @@ def main():
         epsilon=config["eps"],
         theta=10000.0,
     )
-
     weights = LlamaWeights(state_dict, meta, ndev)
 
     model_instance = lib.create_model(
@@ -455,7 +503,7 @@ def main():
     max_steps = 500
     steps = 0
     start_time = time.time()
-    for _step in range(max_steps):
+    for _ in range(max_steps):
         lib.infer(
             model_instance,
             ntok,
