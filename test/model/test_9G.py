@@ -239,7 +239,7 @@ def load_ckpt(ckpt_file_path):
             
             ckpt[param_name] = torch.frombuffer(param, dtype=torch.float16, count=int(param_size)//2).reshape(_shape)
     state_dict = {}
-    state_dict["input_embedding.weight"] = ckpt["input_embedding.weight"].cuda()
+    state_dict["input_embedding.weight"] = ckpt["input_embedding.weight"]
     state_dict["lm_head.weight"] = ckpt["lm_head.weight"]
     state_dict["encoder.output_layernorm.weight"] = ckpt["output_layernorm.weight"]
     for i in range(_nlayer):
@@ -447,6 +447,7 @@ def main():
     dev_ids = (c_uint * ndev)(*[i for i in range(ndev)])
 
     import time
+    _t0 = time.time()
     state_dict = {}
     if model_file.endswith(".pt"):
         state_dict = torch.load(model_file, weights_only=True)
@@ -460,24 +461,27 @@ def main():
     temperature = 1.0
     topk = 50
     topp = 1.0
-
+    
     meta = LlamaMeta(
         dt_logits=DataType.INFINI_F16,
         dt_norm=DataType.INFINI_F16,
         dt_mat=DataType.INFINI_F16,
-        nlayer=config["num_layers"],
-        d=config["dim_model"],
-        nh=config["num_heads"],
-        nkvh=config["num_kv_heads"],
-        dh=config["dim_head"],
-        di=config["dim_ff"],
+        nlayer=config.get("num_layers") or config.get("num_hidden_layers"),
+        d=config.get("dim_model") or config.get("hidden_size"),
+        nh=config.get("num_heads") or config.get("num_attention_heads"),
+        nkvh=config.get("num_kv_heads") or config.get("num_key_value_heads"),
+        dh=config.get("dim_head") or config.get("hidden_size") // config.get("num_attention_heads"),
+        di=config.get("dim_ff") or config.get("intermediate_size"),
         dctx=4096,
         dvoc=config["vocab_size"],
-        epsilon=config["eps"],
+        epsilon=config.get("eps") or config.get("rms_norm_eps"),
         theta=10000.0,
     )
     weights = LlamaWeights(state_dict, meta, ndev)
-
+    
+    _t1 = time.time()
+    print(f"Load: {_t1 - _t0}")
+    
     model_instance = lib.create_model(
         ctypes.byref(meta),
         ctypes.byref(weights),
@@ -485,6 +489,8 @@ def main():
         ndev,
         dev_ids,
     )
+    _t2 = time.time()
+    print(f"Create model: {_t2 - _t1}")
     
     input_content = "<用户>Once upon a time, <AI>"
 
