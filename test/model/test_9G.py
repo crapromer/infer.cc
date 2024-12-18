@@ -8,25 +8,10 @@ from typing import IO, Dict, List
 from pytrie import StringTrie
 import json
 import torch
-
-if len(sys.argv) < 3:
-    print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
-    sys.exit(1)
-model_path =  sys.argv[2]
-if not os.path.isdir(model_path):
-    print(f"Model directory {model_path} does not exist")
-    sys.exit(1)
-model_file = ""
-config_file = os.path.join(model_path, "config.json")
-vocab_file = os.path.join(model_path, "vocab.txt")
-for file_name in os.listdir(model_path):
-    if file_name.endswith(".ckpt") or file_name.endswith(".pt"):
-        model_file = os.path.join(model_path, file_name)
-
+import time
 
 lib_path = os.path.join(os.environ.get("INFINI_ROOT"), "lib", "libinfiniinfer.so")
 lib = ctypes.CDLL(lib_path)
-
 
 class DataType(ctypes.c_int):
     INFINI_BYTE = 0
@@ -52,18 +37,6 @@ class DeviceType(ctypes.c_int):
     DEVICE_TYPE_CAMBRICON = 2
     DEVICE_TYPE_ASCEND = 3
 
-device_type = DeviceType.DEVICE_TYPE_CPU
-if sys.argv[1] == "--cpu":
-    device_type = DeviceType.DEVICE_TYPE_CPU
-elif sys.argv[1] == "--cuda":
-    device_type = DeviceType.DEVICE_TYPE_CUDA
-elif sys.argv[1] == "--cambricon":
-    device_type = DeviceType.DEVICE_TYPE_CAMBRICON
-elif sys.argv[1] == "--ascend":
-    device_type = DeviceType.DEVICE_TYPE_ASCEND
-else:
-    print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
-    sys.exit(1)
 
 
 class LlamaMeta(ctypes.Structure):
@@ -442,102 +415,137 @@ class CPM9GTokenizer(object):
             token_ids = [token_id]
         return token, token_ids
 
-def main():
-    ndev = int(sys.argv[3]) if len(sys.argv) > 3 else 1
-    dev_ids = (c_uint * ndev)(*[i for i in range(ndev)])
-
-    import time
-    _t0 = time.time()
-    state_dict = {}
-    if model_file.endswith(".pt"):
-        state_dict = torch.load(model_file, weights_only=True)
-    elif model_file.endswith(".ckpt"):
-        state_dict = load_ckpt(model_file)
-    else:
-        raise ValueError("Unsupported model file format")
-    tokenizer = CPM9GTokenizer(vocab_file)
-    config = json.load(open(config_file))
-
-    temperature = 1.0
-    topk = 50
-    topp = 1.0
-    
-    meta = LlamaMeta(
-        dt_logits=DataType.INFINI_F16,
-        dt_norm=DataType.INFINI_F16,
-        dt_mat=DataType.INFINI_F16,
-        nlayer=config.get("num_layers") or config.get("num_hidden_layers"),
-        d=config.get("dim_model") or config.get("hidden_size"),
-        nh=config.get("num_heads") or config.get("num_attention_heads"),
-        nkvh=config.get("num_kv_heads") or config.get("num_key_value_heads"),
-        dh=config.get("dim_head") or config.get("hidden_size") // config.get("num_attention_heads"),
-        di=config.get("dim_ff") or config.get("intermediate_size"),
-        dctx=4096,
-        dvoc=config["vocab_size"],
-        epsilon=config.get("eps") or config.get("rms_norm_eps"),
-        theta=10000.0,
-    )
-    weights = LlamaWeights(state_dict, meta, ndev)
-    
-    _t1 = time.time()
-    print(f"Load: {_t1 - _t0}")
-    
-    model_instance = lib.create_model(
-        ctypes.byref(meta),
-        ctypes.byref(weights),
-        device_type,
-        ndev,
-        dev_ids,
-    )
-    _t2 = time.time()
-    print(f"Create model: {_t2 - _t1}")
-    
-    input_content = "<用户>Once upon a time, <AI>"
-
-    print(input_content, end="", flush=True)
-    kv_cache = lib.create_kv_cache(model_instance)
-    tokens = tokenizer.encode(input_content)
-    ntok = len(tokens)
-    nreq = 1
-
-    tokens = (c_uint * ntok)(*tokens)
-    req_lens = (c_uint * nreq)(*[ntok])
-    req_pos = (c_uint * nreq)(*[0])
-    kv_caches = (POINTER(KVCache) * nreq)(*[kv_cache])
-    ans = (c_uint * nreq)()
-
-    max_steps = 500
-    steps = 0
-    start_time = time.time()
-    for _ in range(max_steps):
-        lib.infer(
-            model_instance,
-            ntok,
-            tokens,
-            nreq,
-            req_lens,
-            req_pos,
-            kv_caches,
-            ans,
-            temperature,
-            topk,
-            topp,
+class CPM9GModel():
+    def __init__(self, model_dir_path, device=DeviceType.DEVICE_TYPE_CPU, n_device = 1):
+        if not os.path.isdir(model_dir_path):
+            print(f"Model directory {model_dir_path} does not exist")
+            sys.exit(1)
+        model_file = ""
+        config_file = os.path.join(model_dir_path, "config.json")
+        vocab_file = os.path.join(model_dir_path, "vocab.txt")
+        for file_name in os.listdir(model_dir_path):
+            if file_name.endswith(".ckpt") or file_name.endswith(".pt"):
+                model_file = os.path.join(model_dir_path, file_name)
+        
+        self.ndev = n_device
+        self.dev_ids = (c_uint * self.ndev)(*[i for i in range(self.ndev)])
+        self.device_type = device
+        
+        _t0 = time.time()
+        state_dict = {}
+        if model_file.endswith(".pt"):
+            state_dict = torch.load(model_file, weights_only=True)
+        elif model_file.endswith(".ckpt"):
+            state_dict = load_ckpt(model_file)
+        else:
+            raise ValueError("Unsupported model file format")
+        self.tokenizer = CPM9GTokenizer(vocab_file)
+        config = json.load(open(config_file))
+        
+        self.meta = LlamaMeta(
+            dt_logits=DataType.INFINI_F16,
+            dt_norm=DataType.INFINI_F16,
+            dt_mat=DataType.INFINI_F16,
+            nlayer=config.get("num_layers") or config.get("num_hidden_layers"),
+            d=config.get("dim_model") or config.get("hidden_size"),
+            nh=config.get("num_heads") or config.get("num_attention_heads"),
+            nkvh=config.get("num_kv_heads") or config.get("num_key_value_heads"),
+            dh=config.get("dim_head") or config.get("hidden_size") // config.get("num_attention_heads"),
+            di=config.get("dim_ff") or config.get("intermediate_size"),
+            dctx=4096,
+            dvoc=config["vocab_size"],
+            epsilon=config.get("eps") or config.get("rms_norm_eps"),
+            theta=10000.0,
         )
-        steps += 1
+        weights = LlamaWeights(state_dict, self.meta, self.ndev)
         
-        output_tokens = list(ans)
-        output_str = tokenizer.decode(output_tokens)
-        if output_str.endswith("</s>"):
-            break
-        print(output_str, end="", flush=True)
-        req_pos[0] = req_pos[0] + ntok
-        ntok = 1
-        tokens = (c_uint * ntok)(*output_tokens)
+        _t1 = time.time()
+        print(f"Load: {_t1 - _t0}")
+    
+        self.model_instance = lib.create_model(
+            ctypes.byref(self.meta),
+            ctypes.byref(weights),
+            self.device_type,
+            self.ndev,
+            self.dev_ids,
+        )
+        _t2 = time.time()
+        print(f"Create model: {_t2 - _t1}")
+    
+    def infer(self, input_content, max_steps):
+        temperature = 1.0
+        topk = 1
+        topp = 1.0
+        input_content = "<用户>" + input_content + "<AI>"
+        output_content = ""
+        print(input_content, end="", flush=True)
+        kv_cache = lib.create_kv_cache(self.model_instance)
+        tokens = self.tokenizer.encode(input_content)
+        ntok = len(tokens)
+        nreq = 1
+        print(tokens)
+        tokens = (c_uint * ntok)(*tokens)
         req_lens = (c_uint * nreq)(*[ntok])
+        req_pos = (c_uint * nreq)(*[0])
+        kv_caches = (POINTER(KVCache) * nreq)(*[kv_cache])
+        ans = (c_uint * nreq)()
+        steps = 0
+        start_time = time.time()
+        for _ in range(max_steps):
+            lib.infer(
+                self.model_instance,
+                ntok,
+                tokens,
+                nreq,
+                req_lens,
+                req_pos,
+                kv_caches,
+                ans,
+                temperature,
+                topk,
+                topp,
+            )
+            steps += 1
+            
+            output_tokens = list(ans)
+            output_str = self.tokenizer.decode(output_tokens)
+            if output_str.endswith("</s>"):
+                break
+            output_content += output_str
+            print(output_str, end="", flush=True)
+            req_pos[0] = req_pos[0] + ntok
+            ntok = 1
+            tokens = (c_uint * ntok)(*output_tokens)
+            req_lens = (c_uint * nreq)(*[ntok])
+            
+        print("\n")
+        end_time = time.time()
+        avg_time = (end_time - start_time) *  1000 / steps
+        print(f"Time per step: {avg_time:.3f}ms")
+        return output_content, avg_time
         
-    print("\n")
-    end_time = time.time()
-    print(f"Time per step: {(end_time - start_time) *  1000 / steps:.3f}ms")
+
+def main():
+    if len(sys.argv) < 3:
+        print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
+        sys.exit(1)
+    model_path =  sys.argv[2]
+    device_type = DeviceType.DEVICE_TYPE_CPU
+    if sys.argv[1] == "--cpu":
+        device_type = DeviceType.DEVICE_TYPE_CPU
+    elif sys.argv[1] == "--cuda":
+        device_type = DeviceType.DEVICE_TYPE_CUDA
+    elif sys.argv[1] == "--cambricon":
+        device_type = DeviceType.DEVICE_TYPE_CAMBRICON
+    elif sys.argv[1] == "--ascend":
+        device_type = DeviceType.DEVICE_TYPE_ASCEND
+    else:
+        print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
+        sys.exit(1)
+    
+    ndev = int(sys.argv[3]) if len(sys.argv) > 3 else 1
+    model = CPM9GModel(model_path, device_type, ndev)
+    model.infer("讲个长故事", 500)
 
 
 if __name__ == '__main__':
