@@ -434,7 +434,7 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
                 topk, temperature, stream_compute_raw));
             token_offset += seq_len;
         }
-        RUN_INFINI(infinirtDeviceSynchronize(device, device_id));
+        RUN_INFINI(infinirtStreamSynchronize(stream_compute));
         RUN_INFINI(infinirtMemcpyD2H(&tmp, result_buf->data(stream_data),
                           device, device_id, sizeof(uint64_t) * nreq));
         for (unsigned int req = 0; req < nreq; req++) {
