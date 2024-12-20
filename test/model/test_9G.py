@@ -483,7 +483,7 @@ class CPM9GModel():
         tokens = self.tokenizer.encode(input_content)
         ntok = len(tokens)
         nreq = 1
-        print(tokens)
+  
         tokens = (c_uint * ntok)(*tokens)
         req_lens = (c_uint * nreq)(*[ntok])
         req_pos = (c_uint * nreq)(*[0])
