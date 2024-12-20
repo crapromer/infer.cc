@@ -102,6 +102,7 @@ if has_config("ascend-npu") then
     add_links("libruntime.so")
     add_linkdirs(ASCEND_HOME .. "/../../driver/lib64/driver")
     add_links("libascend_hal.so")
+    add_links("pthread")
 
     target("ascend-npu")
         -- Other configs
