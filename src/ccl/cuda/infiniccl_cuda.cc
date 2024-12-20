@@ -1,6 +1,7 @@
 #include "infiniccl_cuda.h"
 #include "../../runtime/runtime.h"
 #include <cuda_runtime.h>
+#include <iostream>
 #include <nccl.h>
 #include <vector>
 
@@ -8,6 +9,8 @@
     do {                                                                       \
         ncclResult_t ncclErr = (x);                                            \
         if (ncclErr != ncclSuccess) {                                          \
+            std::cerr << "NCCL error: " << ncclErr << " in function "          \
+                      << __func__ << std::endl;                                \
             return INFINICCL_STATUS_EXECUTION_FAILED;                          \
         }                                                                      \
     } while (0)
@@ -16,6 +19,8 @@
     do {                                                                       \
         cudaError_t err = cudaSetDevice(deviceId);                             \
         if (err != cudaSuccess) {                                              \
+            std::cerr << "Cuda set device " << deviceId << "error: " << err    \
+                      << " in function " << __func__ << std::endl;             \
             return INFINICCL_STATUS_BAD_DEVICE;                                \
         }                                                                      \
     } while (0)

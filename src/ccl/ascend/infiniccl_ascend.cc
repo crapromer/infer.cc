@@ -9,7 +9,8 @@
     do {                                                                       \
         HcclResult err = (x);                                                  \
         if (err != HCCL_SUCCESS) {                                             \
-            printf("HCCL Error: %d\n", err);                                   \
+            std::cerr << "HCCL error: " << err << " in function " << __func__  \
+                      << std::endl;                                            \
             return INFINICCL_STATUS_EXECUTION_FAILED;                          \
         }                                                                      \
     } while (0)
@@ -18,7 +19,9 @@
     do {                                                                       \
         aclError err = aclrtSetDevice(deviceId);                               \
         if (err != ACL_SUCCESS) {                                              \
-            printf("aclrtSetDevice Error: %d\n", err);                         \
+            std::cerr << "ACL set device " << deviceId << " Error: " << err    \
+                      << " in function " << __func__ << std::endl;             \
+            std::cerr << aclGetRecentErrMsg() << std::endl;                    \
             return INFINICCL_STATUS_BAD_DEVICE;                                \
         }                                                                      \
     } while (0)
