@@ -1,5 +1,5 @@
 import ctypes
-from ctypes import c_void_p, c_uint, POINTER, c_float
+from ctypes import c_void_p, c_uint, POINTER
 import io
 import sys
 import os
@@ -9,69 +9,11 @@ from pytrie import StringTrie
 import json
 import torch
 import time
+from libinfer import open_library, DataType, DeviceType, LlamaWeights, LlamaMeta, KVCache
 
-lib_path = os.path.join(os.environ.get("INFINI_ROOT"), "lib", "libinfiniinfer.so")
-lib = ctypes.CDLL(lib_path)
+lib = open_library()
 
-class DataType(ctypes.c_int):
-    INFINI_BYTE = 0
-    INFINI_I8 = 1
-    INFINI_I16 = 2
-    INFINI_I32 = 3
-    INFINI_I64 = 4
-    INFINI_U8 = 5
-    INFINI_U16 = 6
-    INFINI_U32 = 7
-    INFINI_U64 = 8
-    INFINI_F8 = 9
-    INFINI_F16 = 10
-    INFINI_F32 = 11
-    INFINI_F64 = 12
-    INFINI_BF16 = 13
-    INFINI_BOOL = 14
-
-
-class DeviceType(ctypes.c_int):
-    DEVICE_TYPE_CPU = 0
-    DEVICE_TYPE_CUDA = 1
-    DEVICE_TYPE_CAMBRICON = 2
-    DEVICE_TYPE_ASCEND = 3
-
-
-
-class LlamaMeta(ctypes.Structure):
-    _fields_ = [
-        ("dt_logits", DataType),
-        ("dt_norm", DataType),
-        ("dt_mat", DataType),
-        ("nlayer", c_uint),
-        ("d", c_uint),
-        ("nh", c_uint),
-        ("nkvh", c_uint),
-        ("dh", c_uint),
-        ("di", c_uint),
-        ("dctx", c_uint),
-        ("dvoc", c_uint),
-        ("epsilon", c_float),
-        ("theta", c_float),
-    ]
-
-
-# Define the LlamaWeights struct
-class LlamaWeights(ctypes.Structure):
-    _fields_ = [
-        ("nlayer", c_uint),
-        ("input_embd", c_void_p),
-        ("output_norm", c_void_p),
-        ("output_embd", c_void_p),
-        ("attn_norm", POINTER(c_void_p)),
-        ("attn_qkv", POINTER(c_void_p)),
-        ("attn_o", POINTER(c_void_p)),
-        ("ffn_norm", POINTER(c_void_p)),
-        ("ffn_gate_up", POINTER(c_void_p)),
-        ("ffn_down", POINTER(c_void_p)),
-    ]
-
+class LlamaWeights9G(LlamaWeights):
     def __init__(self, state_dict, meta, ndev=1):
         self.nlayer = meta.nlayer
         self.input_embd = state_dict["input_embedding.weight"].data_ptr()
@@ -179,7 +121,6 @@ class LlamaWeights(ctypes.Structure):
             ]
         )
 
-    
 
 def load_ckpt(ckpt_file_path):
     import struct
@@ -226,41 +167,7 @@ def load_ckpt(ckpt_file_path):
         state_dict[f"encoder.layers.{i}.ffn.ffn.w_in.w_1.weight"] = ckpt[f"layers.{i}.ff.w_gated.weight"]
         state_dict[f"encoder.layers.{i}.ffn.ffn.w_out.weight"] = ckpt[f"layers.{i}.ff.w_out.weight"]
     return state_dict
-            
-class Model(ctypes.Structure):
-    pass
-
-
-class KVCache(ctypes.Structure):
-    pass
-
-
-lib.create_model.restype = POINTER(Model)
-lib.create_model.argtypes = [
-    POINTER(LlamaMeta),  # LlamaMeta const *
-    POINTER(LlamaWeights),  # LlamaWeights const *
-    DeviceType,  # DeviceType
-    c_uint,  # unsigned int ndev
-    POINTER(c_uint),  # unsigned int const *dev_ids
-]
-
-lib.create_kv_cache.restype = POINTER(KVCache)
-
-lib.infer.restype = None
-lib.infer.argtypes = [
-    ctypes.POINTER(Model),  # struct Model const *
-    c_uint,  # unsigned int ntok
-    POINTER(c_uint),  # unsigned int const *tokens
-    c_uint,  # unsigned int nreq
-    POINTER(c_uint),  # unsigned int const *req_lens
-    POINTER(c_uint),  # unsigned int const *req_pos
-    POINTER(POINTER(KVCache)),  # struct KVCache **kv_caches
-    POINTER(c_uint),  # unsigned int *ans
-    c_float,  # float temperature
-    c_uint,  # unsigned int topk
-    c_float,  # float topp
-]
-
+ 
 def load_vocab(fp: IO[bytes]) -> Dict[str, int]:
     """Loads a vocabulary file into a dictionary."""
     vocab: Dict[str, int] = {}
@@ -457,7 +364,7 @@ class CPM9GModel():
             epsilon=config.get("eps") or config.get("rms_norm_eps"),
             theta=10000.0,
         )
-        weights = LlamaWeights(state_dict, self.meta, self.ndev)
+        weights = LlamaWeights9G(state_dict, self.meta, self.ndev)
         
         _t1 = time.time()
         print(f"Load: {_t1 - _t0}")
@@ -525,9 +432,9 @@ class CPM9GModel():
         return output_content, avg_time
         
 
-def main():
+def test():
     if len(sys.argv) < 3:
-        print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
+        print("Usage: python test_9G.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
         sys.exit(1)
     model_path =  sys.argv[2]
     device_type = DeviceType.DEVICE_TYPE_CPU
@@ -540,7 +447,7 @@ def main():
     elif sys.argv[1] == "--ascend":
         device_type = DeviceType.DEVICE_TYPE_ASCEND
     else:
-        print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
+        print("Usage: python test_9G.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
         sys.exit(1)
     
     ndev = int(sys.argv[3]) if len(sys.argv) > 3 else 1
@@ -549,4 +456,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    test()

@@ -1,91 +1,16 @@
 import ctypes
-from ctypes import c_void_p, c_uint, POINTER, c_float
+from ctypes import c_void_p, c_uint, POINTER
 import sys
-import os
-
-
-if len(sys.argv) < 3:
-    print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir>")
-    sys.exit(1)
-model_path =  sys.argv[2]
-lib_path = os.path.join(os.environ.get("INFINI_ROOT"), "lib", "libinfiniinfer.so")
-lib = ctypes.CDLL(lib_path)
-
-
-class DataType(ctypes.c_int):
-    INFINI_BYTE = 0
-    INFINI_I8 = 1
-    INFINI_I16 = 2
-    INFINI_I32 = 3
-    INFINI_I64 = 4
-    INFINI_U8 = 5
-    INFINI_U16 = 6
-    INFINI_U32 = 7
-    INFINI_U64 = 8
-    INFINI_F8 = 9
-    INFINI_F16 = 10
-    INFINI_F32 = 11
-    INFINI_F64 = 12
-    INFINI_BF16 = 13
-    INFINI_BOOL = 14
-
-
-class DeviceType(ctypes.c_int):
-    DEVICE_TYPE_CPU = 0
-    DEVICE_TYPE_CUDA = 1
-    DEVICE_TYPE_CAMBRICON = 2
-    DEVICE_TYPE_ASCEND = 3
-
-device_type = DeviceType.DEVICE_TYPE_CPU
-if sys.argv[1] == "--cpu":
-    device_type = DeviceType.DEVICE_TYPE_CPU
-elif sys.argv[1] == "--cuda":
-    device_type = DeviceType.DEVICE_TYPE_CUDA
-elif sys.argv[1] == "--cambricon":
-    device_type = DeviceType.DEVICE_TYPE_CAMBRICON
-elif sys.argv[1] == "--ascend":
-    device_type = DeviceType.DEVICE_TYPE_ASCEND
-else:
-    print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir>")
-    sys.exit(1)
-
-
-class LlamaMeta(ctypes.Structure):
-    _fields_ = [
-        ("dt_logits", DataType),
-        ("dt_norm", DataType),
-        ("dt_mat", DataType),
-        ("nlayer", c_uint),
-        ("d", c_uint),
-        ("nh", c_uint),
-        ("nkvh", c_uint),
-        ("dh", c_uint),
-        ("di", c_uint),
-        ("dctx", c_uint),
-        ("dvoc", c_uint),
-        ("epsilon", c_float),
-        ("theta", c_float),
-    ]
-
+from libinfer import open_library, DataType, DeviceType, LlamaWeights, LlamaMeta, KVCache
+import torch
+import transformers
+import time
+    
+lib = open_library()
 
 # Define the LlamaWeights struct
-class LlamaWeights(ctypes.Structure):
-    _fields_ = [
-        ("nlayer", c_uint),
-        ("input_embd", c_void_p),
-        ("output_norm", c_void_p),
-        ("output_embd", c_void_p),
-        ("attn_norm", POINTER(c_void_p)),
-        ("attn_qkv", POINTER(c_void_p)),
-        ("attn_o", POINTER(c_void_p)),
-        ("ffn_norm", POINTER(c_void_p)),
-        ("ffn_gate_up", POINTER(c_void_p)),
-        ("ffn_down", POINTER(c_void_p)),
-    ]
-
+class LlamaWeightsHF(LlamaWeights):
     def __init__(self, llama, ndev=1):
-        import torch
-
         self.nlayer = llama.config.num_hidden_layers
         state_dict = llama.state_dict()
         self.input_embd = state_dict["model.embed_tokens.weight"].data_ptr()
@@ -193,137 +118,113 @@ class LlamaWeights(ctypes.Structure):
             ]
         )
 
+class LlamaModel():
+    def __init__(self, model_dir_path, device=DeviceType.DEVICE_TYPE_CPU, n_device = 1):
+        llama = transformers.LlamaForCausalLM.from_pretrained(
+            model_dir_path, torch_dtype=torch.float16
+        )
+        self.tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_dir_path
+        )
 
-class Model(ctypes.Structure):
-    pass
+        self.meta = LlamaMeta(
+            dt_logits=DataType.INFINI_F16,
+            dt_norm=DataType.INFINI_F16,
+            dt_mat=DataType.INFINI_F16,
+            nlayer=llama.config.num_hidden_layers,
+            d=llama.config.hidden_size,
+            nh=llama.config.num_attention_heads,
+            nkvh=(
+                llama.config.num_key_value_heads
+                if llama.config.num_key_value_heads
+                else llama.config.num_attention_heads
+            ),
+            dh=llama.config.hidden_size // llama.config.num_attention_heads,
+            di=llama.config.intermediate_size,
+            dctx=llama.config.max_position_embeddings,
+            dvoc=llama.config.vocab_size,
+            epsilon=llama.config.rms_norm_eps,
+            theta=llama.config.rope_theta,
+        )
 
-
-class KVCache(ctypes.Structure):
-    pass
-
-
-lib.create_model.restype = POINTER(Model)
-lib.create_model.argtypes = [
-    POINTER(LlamaMeta),  # LlamaMeta const *
-    POINTER(LlamaWeights),  # LlamaWeights const *
-    DeviceType,  # DeviceType
-    c_uint,  # unsigned int ndev
-    POINTER(c_uint),  # unsigned int const *dev_ids
-]
-
-lib.create_kv_cache.restype = POINTER(KVCache)
-
-lib.infer.restype = None
-lib.infer.argtypes = [
-    ctypes.POINTER(Model),  # struct Model const *
-    c_uint,  # unsigned int ntok
-    POINTER(c_uint),  # unsigned int const *tokens
-    c_uint,  # unsigned int nreq
-    POINTER(c_uint),  # unsigned int const *req_lens
-    POINTER(c_uint),  # unsigned int const *req_pos
-    POINTER(POINTER(KVCache)),  # struct KVCache **kv_caches
-    POINTER(c_uint),  # unsigned int *ans
-    c_float,  # float temperature
-    c_uint,  # unsigned int topk
-    c_float,  # float topp
-]
-
-
-def main():
-    ndev = 1
-    dev_ids = (c_uint * ndev)(*[i for i in range(ndev)])
-
-    import torch
-    import transformers
-    import time
-
-    llama = transformers.LlamaForCausalLM.from_pretrained(
-        model_path, torch_dtype=torch.float16
-    )
-    tokenizer = transformers.AutoTokenizer.from_pretrained(
-        model_path
-    )
-
-    temperature = 1.0
-    topk = 1
-    topp = 1.0
-
-    meta = LlamaMeta(
-        dt_logits=DataType.INFINI_F16,
-        dt_norm=DataType.INFINI_F16,
-        dt_mat=DataType.INFINI_F16,
-        nlayer=llama.config.num_hidden_layers,
-        d=llama.config.hidden_size,
-        nh=llama.config.num_attention_heads,
-        nkvh=(
-            llama.config.num_key_value_heads
-            if llama.config.num_key_value_heads
-            else llama.config.num_attention_heads
-        ),
-        dh=llama.config.hidden_size // llama.config.num_attention_heads,
-        di=llama.config.intermediate_size,
-        dctx=llama.config.max_position_embeddings,
-        dvoc=llama.config.vocab_size,
-        epsilon=llama.config.rms_norm_eps,
-        theta=llama.config.rope_theta,
-    )
-
-    weights = LlamaWeights(llama, ndev)
-
-    model_instance = lib.create_model(
-        ctypes.byref(meta),
-        ctypes.byref(weights),
-        device_type,
-        ndev,
-        dev_ids,
-    )
+        self.weights = LlamaWeightsHF(llama, n_device)
+        dev_ids = (c_uint * n_device)(*[i for i in range(n_device)])
+        self.model_instance = lib.create_model(
+            ctypes.byref(self.meta),
+            ctypes.byref(self.weights),
+            device,
+            n_device,
+            dev_ids,
+        )
     
-    input_content = "Once upon a time,"
-
-    print(input_content)
-    kv_cache = lib.create_kv_cache(model_instance)
-    tokens = tokenizer.encode(input_content)
-    ntok = len(tokens)
-    nreq = 1
-
-    tokens = (c_uint * ntok)(*tokens)
-    req_lens = (c_uint * nreq)(*[ntok])
-    req_pos = (c_uint * nreq)(*[0])
-    kv_caches = (POINTER(KVCache) * nreq)(*[kv_cache])
-    ans = (c_uint * nreq)()
-
-    steps = 500
-    start_time = time.time()
-    for _step in range(steps):
-        lib.infer(
-            model_instance,
-            ntok,
-            tokens,
-            nreq,
-            req_lens,
-            req_pos,
-            kv_caches,
-            ans,
-            temperature,
-            topk,
-            topp,
-        )
-
-        output_tokens = list(ans)
-        print(
-            tokenizer._tokenizer.id_to_token(output_tokens[0])
-            .replace("▁", " ")
-            .replace("<0x0A>", "\n"),
-            end="",
-        )
-        req_pos[0] = req_pos[0] + ntok
-        ntok = 1
-        tokens = (c_uint * ntok)(*output_tokens)
+    def infer(self, input_content, max_steps, topp=1.0, topk=1, temperature=1.0):
+        print(input_content, end="", flush=True)
+        kv_cache = lib.create_kv_cache(self.model_instance)
+        tokens = self.tokenizer.encode(input_content)
+        ntok = len(tokens)
+        nreq = 1
+        output_content = ""
+        tokens = (c_uint * ntok)(*tokens)
         req_lens = (c_uint * nreq)(*[ntok])
+        req_pos = (c_uint * nreq)(*[0])
+        kv_caches = (POINTER(KVCache) * nreq)(*[kv_cache])
+        ans = (c_uint * nreq)()
 
-    print("\n")
-    end_time = time.time()
-    print(f"Time per step: {(end_time - start_time) *  1000 / steps:.3f}ms")
+        steps = 0
+        start_time = time.time()
+        for _ in range(max_steps):
+            lib.infer(
+                self.model_instance,
+                ntok,
+                tokens,
+                nreq,
+                req_lens,
+                req_pos,
+                kv_caches,
+                ans,
+                temperature,
+                topk,
+                topp,
+            )
+            steps += 1
+            output_tokens = list(ans)
+            output_str = self.tokenizer._tokenizer.id_to_token(output_tokens[0]).replace("▁", " ").replace("<0x0A>", "\n")
+            if output_str.endswith("</s>"):
+                break
+            output_content += output_str
+            print(output_str, end="", flush=True)
+            req_pos[0] = req_pos[0] + ntok
+            ntok = 1
+            tokens = (c_uint * ntok)(*output_tokens)
+            req_lens = (c_uint * nreq)(*[ntok])
+
+        print("\n")
+        end_time = time.time()
+        avg_time = (end_time - start_time) *  1000 / steps
+        print(f"Time per step: {avg_time:.3f}ms")
+        return output_content, avg_time
+
+def test():
+    if len(sys.argv) < 3:
+        print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
+        sys.exit(1)
+    model_path =  sys.argv[2]
+    device_type = DeviceType.DEVICE_TYPE_CPU
+    if sys.argv[1] == "--cpu":
+        device_type = DeviceType.DEVICE_TYPE_CPU
+    elif sys.argv[1] == "--cuda":
+        device_type = DeviceType.DEVICE_TYPE_CUDA
+    elif sys.argv[1] == "--cambricon":
+        device_type = DeviceType.DEVICE_TYPE_CAMBRICON
+    elif sys.argv[1] == "--ascend":
+        device_type = DeviceType.DEVICE_TYPE_ASCEND
+    else:
+        print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
+        sys.exit(1)
+    
+    ndev = int(sys.argv[3]) if len(sys.argv) > 3 else 1
+    model = LlamaModel(model_path, device_type, ndev)
+    model.infer("讲个长故事", 500)
 
 if __name__ == "__main__":
-    main()
+    test()
