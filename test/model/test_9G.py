@@ -379,11 +379,7 @@ class CPM9GModel():
         _t2 = time.time()
         print(f"Create model: {_t2 - _t1}")
     
-    def infer(self, input_content, max_steps):
-        temperature = 1.0
-        topk = 1
-        topp = 1.0
-        input_content = "<用户>" + input_content + "<AI>"
+    def infer(self, input_content, max_steps, topp=1.0, topk=1, temperature=1.0):
         output_content = ""
         print(input_content, end="", flush=True)
         kv_cache = lib.create_kv_cache(self.model_instance)
@@ -429,8 +425,23 @@ class CPM9GModel():
         end_time = time.time()
         avg_time = (end_time - start_time) *  1000 / steps
         print(f"Time per step: {avg_time:.3f}ms")
+        for kv_cache in kv_caches:
+            lib.drop_kv_cache(self.model_instance, kv_cache)
         return output_content, avg_time
-        
+    
+    def apply_template(self, messages):
+        complete_msg = ""
+        for message in messages:
+            if message["role"] == "user":
+                complete_msg += "<用户>" +message["content"]
+            elif message["role"] == "assistant":
+                complete_msg += "<AI>" + message["content"]
+            elif message["role"] == "system":
+                complete_msg += "<用户>" + message["content"]
+            else:
+                print(f"Unknown role: {message['role']}")
+                complete_msg += message["content"]
+        return complete_msg + "<AI>"
 
 def test():
     if len(sys.argv) < 3:
@@ -452,7 +463,7 @@ def test():
     
     ndev = int(sys.argv[3]) if len(sys.argv) > 3 else 1
     model = CPM9GModel(model_path, device_type, ndev)
-    model.infer("讲个长故事", 500)
+    model.infer("<用户>讲个长故事<AI>", 500)
 
 
 if __name__ == '__main__':

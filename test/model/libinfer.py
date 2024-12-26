@@ -79,7 +79,7 @@ def open_library():
     ]
 
     lib.create_kv_cache.restype = POINTER(KVCache)
-
+    lib.drop_kv_cache.argtypes= [ctypes.POINTER(Model), POINTER(KVCache)]
     lib.infer.restype = None
     lib.infer.argtypes = [
         ctypes.POINTER(Model),  # struct Model const *

@@ -202,6 +202,8 @@ class LlamaModel():
         end_time = time.time()
         avg_time = (end_time - start_time) *  1000 / steps
         print(f"Time per step: {avg_time:.3f}ms")
+        for kv_cache in kv_caches:
+            lib.drop_kv_cache(self.model_instance, kv_cache)
         return output_content, avg_time
 
 def test():
