@@ -407,14 +407,13 @@ void infer_device(LlamaMeta const &meta, DeviceResource const &rsrc,
     if (idev == 0) {
         size_t token_offset = 0;
         for (unsigned int req = 0; req < nreq; req++) {
-            auto past_len = req_pos[req];
             auto seq_len = req_lens[req];
+            token_offset += seq_len;   
             RUN_INFINI(infiniopRMSNorm(
                 desc_norm_out, workspace, workspace_size,
                 logits_out->data(req * d, stream_compute),
-                logits_in->data(token_offset * d, stream_compute),
+                logits_in->data((token_offset - 1) * d, stream_compute),
                 rsrc.w_out_norm->data(stream_compute), stream_compute_raw));
-            token_offset += seq_len;
         }
         RUN_INFINI(infiniopMatmul(
             desc_out_embd, workspace, workspace_size,
