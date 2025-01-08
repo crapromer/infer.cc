@@ -29,6 +29,13 @@ option("ascend-npu")
     add_defines("ENABLE_ASCEND_NPU")
 option_end()
 
+option("teco-sdaa")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable or disable Teco SDAA functions")
+    add_defines("ENABLE_TECO_SDAA")
+option_end()
+
 option("ccl")
     set_default(true)
     set_showmenu(true)
@@ -83,6 +90,20 @@ if has_config("nv-gpu") then
             end
             add_files("src/ccl/cuda/*.cc")
         end
+    target_end()
+end
+
+if has_config("teco-sdaa") then
+    add_defines("ENABLE_TECO_SDAA")
+    add_includedirs("/opt/tecoai/include")
+    add_linkdirs("/opt/tecoai/lib64")
+    add_links("libsdaart.so")
+    target("teco_sdaa")
+        set_kind("static")
+        set_languages("cxx17")
+        on_install(function (target) end)
+        add_files("src/runtime/teco/*.cc")
+        add_cxflags("-lstdc++ -Wall -Werror -fPIC")
     target_end()
 end
 
