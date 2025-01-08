@@ -220,6 +220,8 @@ def test():
         device_type = DeviceType.DEVICE_TYPE_CAMBRICON
     elif sys.argv[1] == "--ascend":
         device_type = DeviceType.DEVICE_TYPE_ASCEND
+    elif sys.argv[1] == "--teco":
+        device_type = DeviceType.DEVICE_TYPE_TECO
     else:
         print("Usage: python test_llama.py [--cpu | --cuda | --cambricon | --ascend] <path/to/model_dir> [n_device]")
         sys.exit(1)
