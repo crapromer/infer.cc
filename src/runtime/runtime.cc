@@ -272,7 +272,7 @@ __C infinirtStatus_t infinirtMallocAsync(void **pMemory, DeviceType device,
     case DEVICE_ASCEND:
         return mallocAscendAsync(pMemory, deviceId, size, stream);
     case DEVICE_TECO:
-        return mallocAscendAsync(pMemory, deviceId, size, stream);
+        return mallocTecoAsync(pMemory, deviceId, size, stream);
     default:
         return INFINIRT_STATUS_DEVICE_NOT_SUPPORTED;
     }

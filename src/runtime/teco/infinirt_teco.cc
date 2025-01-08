@@ -1,5 +1,6 @@
 #include "infinirt_teco.h"
 #include <sdaa_runtime.h>
+#include <iostream>
 #define SDAACHECK(error)                                                                           \
 {                                                                                                  \
     sdaaError_t localError = error;                                                                \
@@ -23,7 +24,7 @@
 #define SWITCH_DEVICE(deviceId)                                                \
     do {                                                                       \
         sdaaError_t err = sdaaSetDevice(deviceId);                             \
-        if (err != cudaSuccess) {                                              \
+        if (err != sdaaSuccess) {                                              \
             std::cerr << "Teco set device " << deviceId << "error: " << err    \
                       << " in function " << __func__ << std::endl;             \
             return INFINIRT_STATUS_BAD_DEVICE;                                 \
@@ -39,7 +40,7 @@ inline sdaaStream_t getSdaaStream(infinirtStream_t stream) {
 
 infinirtStatus_t synchronizeTecoDevice(uint32_t deviceId) {
     SWITCH_DEVICE(deviceId);
-    CUDA_CALL(sdaaDeviceSynchronize());
+    TECO_CALL(sdaaDeviceSynchronize());
     return INFINIRT_STATUS_SUCCESS;
 }
 
@@ -85,7 +86,7 @@ infinirtStatus_t destoryTecoEvent(infinirtEvent_t event){
 infinirtStatus_t waitTecoEvent(infinirtEvent_t event, infinirtStream_t stream){
     SWITCH_DEVICE(event->device_id);
     TECO_CALL(sdaaStreamWaitEvent(getSdaaStream(stream),
-                                  static_cast<sdaaEvent_t>(event->event)));
+                                  static_cast<sdaaEvent_t>(event->event),0));
     return INFINIRT_STATUS_SUCCESS;
 }
 infinirtStatus_t recordTecoEvent(infinirtEvent_t event, infinirtStream_t stream){
@@ -118,7 +119,7 @@ infinirtStatus_t mallocTeco(void **pMemory, uint32_t deviceId, size_t size){
 infinirtStatus_t mallocTecoAsync(void **pMemory, uint32_t deviceId, size_t size, infinirtStream_t stream){
     SWITCH_DEVICE(deviceId);
     void *sdaa_ptr;
-    TECO_CALL(sdaaMallocAsync(&sdaa_ptr, size, getSdaaStream(stream)));
+    TECO_CALL(sdaaMalloc(&sdaa_ptr, size));
     *pMemory = sdaa_ptr;
     return INFINIRT_STATUS_SUCCESS;
 }
@@ -135,7 +136,7 @@ infinirtStatus_t freeTeco(void *ptr, uint32_t deviceId) {
     return INFINIRT_STATUS_SUCCESS;
 }
 infinirtStatus_t freeTecoAsync(void *ptr, uint32_t deviceId, infinirtStream_t stream){
-
+    return INFINIRT_STATUS_SUCCESS;
 }
 infinirtStatus_t freeHostTeco(void *ptr, uint32_t deviceId){
     SWITCH_DEVICE(deviceId);

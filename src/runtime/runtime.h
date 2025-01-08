@@ -3,6 +3,7 @@
 #include "infinirt.h"
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 
 struct infinirtStream{
     DeviceType device;

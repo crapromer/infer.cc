@@ -97,8 +97,8 @@ if has_config("teco-sdaa") then
     add_defines("ENABLE_TECO_SDAA")
     add_includedirs("/opt/tecoai/include")
     add_linkdirs("/opt/tecoai/lib64")
-    add_links("libsdaart.so")
-    target("teco_sdaa")
+    add_links("sdaart")
+    target("teco-sdaa")
         set_kind("static")
         set_languages("cxx17")
         on_install(function (target) end)
@@ -151,6 +151,9 @@ target("infinirt")
     if has_config("ascend-npu") then
         add_deps("ascend-npu")
     end
+    if has_config("teco-sdaa") then
+        add_deps("teco-sdaa")
+    end
 
     set_languages("cxx17")
     add_files("src/runtime/runtime.cc")
@@ -168,6 +171,9 @@ target("infiniccl")
     end
     if has_config("ascend-npu") then
         add_deps("ascend-npu")
+    end
+    if has_config("teco-sdaa") then
+        add_deps("teco-sdaa")
     end
     set_languages("cxx17")
     add_files("src/ccl/infiniccl.cc")
@@ -204,6 +210,9 @@ target("infini_infer_test")
     end
     if has_config("ascend-npu") then
         add_deps("ascend-npu")
+    end
+    if has_config("teco-sdaa") then
+        add_deps("teco-sdaa")
     end
     add_cxflags("-g", "-O0")
     add_ldflags("-g")
