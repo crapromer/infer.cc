@@ -98,11 +98,16 @@ if has_config("teco-sdaa") then
     add_includedirs("/opt/tecoai/include")
     add_linkdirs("/opt/tecoai/lib64")
     add_links("sdaart")
+    
     target("teco-sdaa")
         set_kind("static")
         set_languages("cxx17")
         on_install(function (target) end)
         add_files("src/runtime/teco/*.cc")
+        if has_config("ccl") then
+            add_links("tccl")
+            add_files("src/ccl/teco/*cc")
+        end
         add_cxflags("-lstdc++ -Wall -Werror -fPIC")
     target_end()
 end

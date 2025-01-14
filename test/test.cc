@@ -14,4 +14,10 @@ int main() {
     printf("Test CCL functions: Ascend\n");
     test_ccl(DEVICE_ASCEND);
 #endif
+#ifdef ENABLE_TECO_SDAA
+    printf("Test tensor functions: Teco\n");
+    test_tensor(DEVICE_TECO);
+    printf("Test CCL functions: Teco\n");
+    test_ccl(DEVICE_TECO);
+#endif
 }
