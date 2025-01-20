@@ -40,7 +40,7 @@ __C infinicclStatus_t infinicclAllReduceSum(infinicclComm_t comm, void *sendbuf,
                                             InfiniDataType_t datatype,
                                             infinirtStream_t stream) {
     if (comm == nullptr) {
-        return INFINICCL_STATUS_COMMUNICATOR_UNINITIALIZED;
+        return INFINICCL_STATUS_SUCCESS;
     }
     if (stream != nullptr && comm->deviceType != stream->device) {
         return INFINICCL_STATUS_DEVICE_MISMATCH;

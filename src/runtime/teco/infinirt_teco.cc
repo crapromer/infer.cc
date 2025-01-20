@@ -136,6 +136,8 @@ infinirtStatus_t freeTeco(void *ptr, uint32_t deviceId) {
     return INFINIRT_STATUS_SUCCESS;
 }
 infinirtStatus_t freeTecoAsync(void *ptr, uint32_t deviceId, infinirtStream_t stream){
+    SWITCH_DEVICE(deviceId);
+    TECO_CALL(sdaaFree(ptr));
     return INFINIRT_STATUS_SUCCESS;
 }
 infinirtStatus_t freeHostTeco(void *ptr, uint32_t deviceId){
